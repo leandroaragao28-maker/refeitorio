@@ -735,21 +735,32 @@ function setStatus(msg) {
   document.getElementById('status-text').textContent = msg;
 }
 
-// ── CADASTRO VIA GOOGLE DRIVE ────────────────────────────────────────────────
-const CADASTRO_DRIVE_URL = 'https://drive.google.com/uc?export=download&id=1FhiEuzls408EDga49sNhiWMWMMudbxo6';
-
+// ── CADASTRO VIA APPS SCRIPT ─────────────────────────────────────────────────
 async function carregarDoDrive() {
-  setCadastroStatus('⏳ Atualizando cadastro do Drive...');
+  setCadastroStatus('⏳ Carregando cadastro...');
+  const url = document.getElementById('webhook-url').value.trim();
+  if (!url) {
+    setCadastroStatus('⚠️ Configure a URL do Apps Script primeiro.');
+    return;
+  }
   try {
-    // Usa proxy público para evitar bloqueio de CORS do Google Drive
-    const proxy = 'https://corsproxy.io/?' + encodeURIComponent(CADASTRO_DRIVE_URL);
-    const res = await fetch(proxy);
-    if (!res.ok) throw new Error('Erro HTTP ' + res.status);
-    const text = await res.text();
-    carregarCadastro(text);
+    const res  = await fetch(url + '?acao=cadastro');
+    const json = await res.json();
+    if (json.status !== 'ok' || !json.cadastro) throw new Error(json.message);
+
+    // Monta o objeto cadastro direto do JSON (sem precisar parsear CSV)
+    cadastro = {};
+    json.cadastro.forEach(c => {
+      cadastro[c.cpf] = { nome: c.nome, demitido: c.demitido };
+    });
+
+    const total  = Object.keys(cadastro).length;
+    const ativos = Object.values(cadastro).filter(c => !c.demitido).length;
+    setCadastroStatus(`✅ <strong>${ativos} ativos</strong> · ${total - ativos} desligados · ${new Date().toLocaleTimeString('pt-BR')}`);
+
   } catch (e) {
-    setCadastroStatus('❌ Falha ao carregar do Drive. Use "Arquivo local".');
-    console.warn('Drive:', e);
+    setCadastroStatus('❌ Falha ao carregar. Use "Arquivo local".');
+    console.warn('Cadastro:', e);
   }
 }
 
