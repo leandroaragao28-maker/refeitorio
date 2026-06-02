@@ -191,8 +191,14 @@
     margin-top: 14px;
   }
   @keyframes popIn { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:none} }
-  .feedback-ok  { background: var(--green-pale); border: 2px solid var(--green-light); }
-  .feedback-err { background: var(--red-pale);   border: 2px solid var(--red); }
+  .feedback-ok    { background: var(--green-pale); border: 2px solid var(--green-light); }
+  .feedback-err   { background: var(--red-pale);   border: 2px solid var(--red); }
+  .feedback-dup   { background: #FFF8E1; border: 2px solid #F9A825; }
+  .feedback-block { background: var(--red-pale);   border: 2px solid var(--red); }
+  .feedback-warn  { background: #FFF3E0; border: 2px solid #E65100; }
+  .feedback-dup .feedback-name  { color: #F57F17; }
+  .feedback-block .feedback-name { color: var(--red); }
+  .feedback-warn .feedback-name  { color: #BF360C; }
   .feedback-emoji { font-size: 2.8rem; text-align: center; margin-bottom: 6px; }
   .feedback-name  { font-size: 1.5rem; font-weight: 700; text-align: center; color: var(--green-dark); }
   .feedback-sub   { font-size: .82rem; text-align: center; color: var(--text-sub); margin-top: 4px; }
@@ -373,6 +379,22 @@
     <div class="card">
       <div class="card-title">⚙ Configuração</div>
 
+      <label>Cadastro de Colaboradores (CSV)</label>
+      <div style="background:var(--bg);border:1px dashed var(--border);border-radius:10px;padding:14px;text-align:center;margin-bottom:4px;">
+        <div style="font-size:.8rem;color:var(--text-sub);margin-bottom:10px;">
+          CSV com colunas: <strong>CPF, Nome, DataRescisao</strong><br>
+          <span style="font-size:.72rem;opacity:.7">DataRescisao vazia = ativo | preenchida = desligado</span>
+        </div>
+        <input type="file" id="cadastro-file" accept=".csv" style="display:none" onchange="onCadastroUpload(event)">
+        <button class="btn-sm" onclick="document.getElementById('cadastro-file').click()" style="width:100%;justify-content:center;display:flex;padding:10px;">
+          📂 Selecionar arquivo CSV
+        </button>
+        <div id="cadastro-status" style="font-size:.75rem;color:var(--text-sub);margin-top:8px;">Nenhum cadastro carregado</div>
+      </div>
+
+      <label>Nome deste Terminal</label>
+      <input type="text" id="terminal-name" value="Terminal 1" placeholder="Ex: Terminal 1, Terminal Obra A">
+
       <label>URL do Google Apps Script</label>
       <input type="url" id="webhook-url" value="https://script.google.com/macros/s/AKfycbzh1h6jhqE_IC4TqEpp_JRRdviovOHo8BbZiVBm6IYLi2HCo_EY81j7eBVElM0IiKhT/exec">
 
@@ -503,6 +525,57 @@ async function stopScanner() {
   setStatus('Scanner pausado');
 }
 
+// ── CADASTRO DE COLABORADORES (carregado da planilha) ─────────────────────────
+// Formato: { "03618045395": { nome: "ADRIANO DA SILVA", demitido: false } }
+let cadastro = {};
+
+function carregarCadastro(csvText) {
+  // Espera CSV com colunas: CPF, Nome, DataRescisao (vazia = ativo)
+  const lines = csvText.trim().split('\n').slice(1); // pula cabeçalho
+  cadastro = {};
+  lines.forEach(line => {
+    const cols = line.split(',').map(c => c.replace(/"/g, '').trim());
+    const cpf      = (cols[0] || '').replace(/\D/g, ''); // só dígitos — aceita com ou sem pontuação
+    const nome     = cols[1] || '';
+    const rescisao = (cols[2] || '').trim();
+    if (cpf && nome) {
+      cadastro[cpf] = { nome, demitido: rescisao !== '' };
+    }
+  });
+  const total  = Object.keys(cadastro).length;
+  const ativos = Object.values(cadastro).filter(c => !c.demitido).length;
+  setStatus(`Cadastro: ${ativos} ativos, ${total - ativos} desligados`);
+  alert(`✅ Cadastro carregado!\n${ativos} colaboradores ativos\n${total - ativos} desligados`);
+}
+
+// ── DECODIFICAÇÃO DO QR CODE ──────────────────────────────────────────────────
+function decodificarQR(raw) {
+  // Tenta Base64 (formato dos QR Codes SS&B existentes)
+  try {
+    const decoded = atob(raw);
+    // Formato: campo1:campo2:cpf:flag  ex: 09572788:03618045395:005195:1
+    if (decoded.includes(':')) {
+      const parts = decoded.split(':');
+      // CPF completo é o campo com 11 dígitos
+      const cpf = parts.find(p => /^\d{11}$/.test(p)) || '';
+      return { tipo: 'base64', cpf, raw: decoded };
+    }
+  } catch (e) { /* não é Base64 */ }
+
+  // Formato SSB gerado pelo app
+  if (raw.startsWith('SSB|')) {
+    const parts = raw.split('|');
+    return { tipo: 'ssb', nome: parts[1] || raw, empId: parts[2] || '', cpf: '' };
+  }
+
+  // Texto puro (fallback)
+  return { tipo: 'texto', nome: raw, cpf: '' };
+}
+
+// ── REGISTROS DA SESSÃO (controle de duplicatas) ──────────────────────────────
+// Chave: "cpf_ou_nome|refeição|data"  →  impede repetição na mesma refeição/dia
+const registrosSessao = new Set();
+
 // ── LEITURA ───────────────────────────────────────────────────────────────────
 async function onScanSuccess(decodedText) {
   const now = Date.now();
@@ -511,26 +584,57 @@ async function onScanSuccess(decodedText) {
   lastCode = decodedText;
   lastTime = now;
 
-  let name, empId;
-  if (decodedText.startsWith('SSB|')) {
-    const parts = decodedText.split('|');
-    name  = parts[1] || decodedText;
-    empId = parts[2] || '';
-  } else {
-    name  = decodedText;
-    empId = '';
-  }
-
+  const qr = decodificarQR(decodedText);
   const ts      = new Date();
   const dateStr = ts.toLocaleDateString('pt-BR');
   const timeStr = ts.toLocaleTimeString('pt-BR');
 
-  addToLog(name, empId, dateStr, timeStr, currentMeal, true);
-  showFeedback(true, name, `${currentMeal} — ${timeStr}`);
-  setStatus(`Último: ${name} às ${timeStr}`);
-  sendToSheet({ name, empId, date: dateStr, time: timeStr, meal: currentMeal });
+  // ── Resolve nome e valida ──
+  let nome, empId, cpf;
+  cpf   = qr.cpf || '';
+  empId = qr.empId || cpf;
 
-  // Vibração no celular
+  if (cpf && Object.keys(cadastro).length > 0) {
+    // Tem cadastro carregado → valida pelo CPF
+    const colaborador = cadastro[cpf];
+
+    if (!colaborador) {
+      showFeedback('warn', 'CPF não encontrado', `CPF: ${cpf}`);
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      return;
+    }
+
+    if (colaborador.demitido) {
+      showFeedback('block', colaborador.nome, 'Colaborador desligado — acesso negado');
+      if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+      setStatus(`Bloqueado: ${colaborador.nome} (desligado)`);
+      return;
+    }
+
+    nome = colaborador.nome;
+
+  } else if (qr.nome) {
+    // Sem cadastro carregado → usa nome do QR
+    nome = qr.nome;
+  } else {
+    nome = cpf || decodedText;
+  }
+
+  // ── Verifica duplicata na mesma refeição/dia ──
+  const chave = `${cpf || nome}|${currentMeal}|${dateStr}`;
+  if (registrosSessao.has(chave)) {
+    showFeedback('dup', nome, `Já registrado em ${currentMeal} hoje`);
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    setStatus(`Duplicata bloqueada: ${nome}`);
+    return;
+  }
+
+  // ── Registra ──
+  registrosSessao.add(chave);
+  addToLog(nome, empId, dateStr, timeStr, currentMeal, true);
+  showFeedback('ok', nome, `${currentMeal} — ${timeStr}`);
+  setStatus(`Último: ${nome} às ${timeStr}`);
+  sendToSheet({ name: nome, empId, cpf, date: dateStr, time: timeStr, meal: currentMeal });
   if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
 }
 
@@ -538,14 +642,30 @@ async function onScanSuccess(decodedText) {
 async function sendToSheet(data) {
   const url = document.getElementById('webhook-url').value.trim();
   if (!url) return;
+
+  const terminal = document.getElementById('terminal-name').value.trim() || 'Terminal 1';
+
   try {
-    await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
-      mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify({ ...data, terminal })
     });
-  } catch (e) { console.warn('Envio:', e); }
+    const json = await res.json();
+
+    if (json.status === 'duplicate') {
+      // Outro terminal já registrou este colaborador — desfaz o registro local
+      const chave = `${data.cpf || data.name}|${data.meal}|${data.date}`;
+      registrosSessao.add(chave); // garante que fica bloqueado localmente também
+      // Remove do log local se foi adicionado
+      logEntries = logEntries.filter(e => !(e.name === data.name && e.meal === data.meal && e.date === data.date));
+      renderLog();
+      showFeedback('dup', data.name, 'Já registrado em outro terminal');
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    }
+  } catch (e) {
+    console.warn('Envio:', e);
+  }
 }
 
 // ── LOG ───────────────────────────────────────────────────────────────────────
@@ -595,20 +715,42 @@ function exportCSV() {
 
 // ── FEEDBACK ──────────────────────────────────────────────────────────────────
 let feedbackTimer;
-function showFeedback(ok, name, sub) {
+const feedbackCfg = {
+  ok:    { cls: 'feedback-ok',    emoji: '✅', dur: 4000 },
+  dup:   { cls: 'feedback-dup',   emoji: '🔁', dur: 5000 },
+  block: { cls: 'feedback-block', emoji: '🚫', dur: 5000 },
+  warn:  { cls: 'feedback-warn',  emoji: '⚠️', dur: 5000 },
+};
+function showFeedback(tipo, name, sub) {
   const el = document.getElementById('feedback');
   clearTimeout(feedbackTimer);
-  el.className = ok ? 'feedback-ok' : 'feedback-err';
+  const cfg = feedbackCfg[tipo] || feedbackCfg.ok;
+  el.className = cfg.cls;
   el.style.display = 'block';
   el.innerHTML = `
-    <div class="feedback-emoji">${ok ? '✅' : '❌'}</div>
+    <div class="feedback-emoji">${cfg.emoji}</div>
     <div class="feedback-name">${name}</div>
     <div class="feedback-sub">${sub || ''}</div>`;
-  feedbackTimer = setTimeout(() => { el.style.display = 'none'; }, 4000);
+  feedbackTimer = setTimeout(() => { el.style.display = 'none'; }, cfg.dur);
 }
 
 function setStatus(msg) {
   document.getElementById('status-text').textContent = msg;
+}
+
+// ── UPLOAD CADASTRO CSV ───────────────────────────────────────────────────────
+function onCadastroUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    carregarCadastro(e.target.result);
+    const total  = Object.keys(cadastro).length;
+    const ativos = Object.values(cadastro).filter(c => !c.demitido).length;
+    document.getElementById('cadastro-status').innerHTML =
+      `✅ <strong>${file.name}</strong> — ${ativos} ativos, ${total - ativos} desligados`;
+  };
+  reader.readAsText(file, 'UTF-8');
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
