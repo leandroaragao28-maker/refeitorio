@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SS&B — Controle de Refeitório</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --green-dark:   #1B5E20;
+    --green-mid:    #2E7D32;
+    --green-light:  #4CAF50;
+    --green-pale:   #E8F5E9;
+    --green-accent: #69F0AE;
+    --text-main:    #1a1a1a;
+    --text-sub:     #555;
+    --bg:           #f4f6f4;
+    --card:         #ffffff;
+    --border:       #d0e4d2;
+    --red:          #c62828;
+    --red-pale:     #ffebee;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text-main);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--green-dark);
+    color: white;
+    padding: 18px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 12px rgba(0,0,0,.25);
+  }
+  header .brand {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.9rem;
+    letter-spacing: 3px;
+    color: var(--green-accent);
+  }
+  header .sub {
+    font-size: .78rem;
+    opacity: .75;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  #clock {
+    text-align: right;
+    font-size: .9rem;
+    opacity: .85;
+    line-height: 1.5;
+    font-weight: 300;
+  }
+
+  /* ── LAYOUT ── */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    padding: 28px;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  @media (max-width: 720px) {
+    main { grid-template-columns: 1fr; padding: 16px; }
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  }
+  .card-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 2px;
+    color: var(--green-dark);
+    margin-bottom: 18px;
+    border-bottom: 2px solid var(--green-pale);
+    padding-bottom: 10px;
+  }
+
+  /* ── CONFIG ── */
+  label { font-size: .82rem; font-weight: 500; color: var(--text-sub); display: block; margin-bottom: 4px; margin-top: 12px; }
+  input, select {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: .9rem;
+    background: var(--bg);
+    color: var(--text-main);
+    transition: border-color .2s;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--green-light); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: .9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-primary {
+    background: var(--green-mid);
+    color: white;
+    width: 100%;
+    justify-content: center;
+    margin-top: 16px;
+    padding: 12px;
+    font-size: 1rem;
+  }
+  .btn-primary:hover { background: var(--green-dark); }
+  .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+
+  .btn-sm {
+    padding: 7px 14px;
+    font-size: .8rem;
+    background: var(--green-pale);
+    color: var(--green-dark);
+    border: 1px solid var(--border);
+  }
+  .btn-sm:hover { background: var(--green-light); color: white; }
+
+  /* ── SCANNER ── */
+  #scanner-wrap {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px dashed var(--green-light);
+    background: #111;
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  #reader { width: 100%; }
+  .scan-placeholder {
+    color: #888;
+    font-size: .85rem;
+    text-align: center;
+    padding: 30px;
+  }
+  .scan-placeholder svg { display: block; margin: 0 auto 12px; opacity: .4; }
+
+  /* Overlay de scan beam */
+  #scan-beam {
+    display: none;
+    position: absolute;
+    left: 0; right: 0;
+    height: 3px;
+    background: var(--green-accent);
+    box-shadow: 0 0 12px var(--green-accent);
+    animation: beam 2s ease-in-out infinite;
+    z-index: 10;
+  }
+  @keyframes beam {
+    0%   { top: 10%; }
+    50%  { top: 85%; }
+    100% { top: 10%; }
+  }
+
+  /* ── FEEDBACK ── */
+  #feedback {
+    margin-top: 16px;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: .9rem;
+    display: none;
+    animation: slideIn .3s ease;
+  }
+  @keyframes slideIn { from { opacity:0; transform: translateY(-6px); } to { opacity:1; transform: none; } }
+  .feedback-ok  { background: var(--green-pale); border: 1px solid var(--green-light); color: var(--green-dark); }
+  .feedback-err { background: var(--red-pale);   border: 1px solid var(--red); color: var(--red); }
+
+  .feedback-name { font-size: 1.3rem; font-weight: 600; }
+  .feedback-time { font-size: .8rem; color: var(--text-sub); margin-top: 2px; }
+
+  /* ── LOG ── */
+  #log-list {
+    list-style: none;
+    max-height: 320px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #log-list li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-size: .85rem;
+  }
+  #log-list li .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--green-light);
+    flex-shrink: 0;
+  }
+  #log-list li .dot.err { background: var(--red); }
+  #log-list li .name { font-weight: 600; flex: 1; }
+  #log-list li .time { color: var(--text-sub); white-space: nowrap; font-size: .78rem; }
+
+  .log-empty { text-align: center; color: #aaa; font-size: .85rem; padding: 30px 0; }
+
+  /* ── STATUS BAR ── */
+  #status-bar {
+    background: var(--green-dark);
+    color: rgba(255,255,255,.7);
+    font-size: .75rem;
+    padding: 6px 28px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+  }
+  #status-bar .dot-live { width: 8px; height: 8px; border-radius: 50%; background: var(--green-accent); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* ── GERADOR DE QR ── */
+  #qr-section { margin-top: 16px; }
+  #qr-output { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; }
+  .qr-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+    width: 140px;
+  }
+  .qr-card img { width: 100px; height: 100px; }
+  .qr-card .qr-name { font-size: .78rem; font-weight: 600; margin-top: 6px; color: var(--green-dark); word-break: break-word; }
+  .qr-card .qr-id   { font-size: .65rem; color: #999; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="brand">SS&amp;B Construtora</div>
+    <div class="sub">Sistema de Controle de Refeitório</div>
+  </div>
+  <div id="clock"></div>
+</header>
+
+<main>
+
+  <!-- COLUNA ESQUERDA: Config + Scanner -->
+  <div style="display:flex;flex-direction:column;gap:20px;">
+
+    <!-- Configuração -->
+    <div class="card">
+      <div class="card-title">⚙ Configuração</div>
+
+      <label>URL do Google Apps Script (webhook)</label>
+      <input type="url" id="webhook-url" value="https://script.google.com/macros/s/AKfycbzh1h6jhqE_IC4TqEpp_JRRdviovOHo8BbZiVBm6IYLi2HCo_EY81j7eBVElM0IiKhT/exec">
+
+      <label>Refeição</label>
+      <select id="meal-type">
+        <option value="Café da Manhã">☕ Café da Manhã</option>
+        <option value="Almoço" selected>🍽 Almoço</option>
+        <option value="Jantar">🌙 Jantar</option>
+        <option value="Lanche">🥪 Lanche</option>
+      </select>
+
+      <label>Câmera</label>
+      <select id="camera-select"></select>
+
+      <button class="btn btn-primary" id="btn-start" onclick="toggleScanner()">
+        <span id="btn-icon">▶</span> <span id="btn-label">Iniciar Scanner</span>
+      </button>
+    </div>
+
+    <!-- Scanner -->
+    <div class="card">
+      <div class="card-title">📷 Leitura de QR Code</div>
+      <div id="scanner-wrap">
+        <div class="scan-placeholder" id="scan-placeholder">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="4" height="4"/>
+            <line x1="20" y1="14" x2="20" y2="20"/><line x1="17" y1="20" x2="20" y2="20"/>
+          </svg>
+          Clique em "Iniciar Scanner" para ativar a câmera
+        </div>
+        <div id="reader"></div>
+        <div id="scan-beam"></div>
+      </div>
+
+      <div id="feedback"></div>
+    </div>
+  </div>
+
+  <!-- COLUNA DIREITA: Log + Gerador -->
+  <div style="display:flex;flex-direction:column;gap:20px;">
+
+    <!-- Log local -->
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>📋 Registros de Hoje</span>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-sm" onclick="exportCSV()">⬇ CSV</button>
+          <button class="btn btn-sm" onclick="clearLog()">🗑 Limpar</button>
+        </div>
+      </div>
+      <div id="log-count" style="font-size:.82rem;color:var(--text-sub);margin-bottom:12px;">0 registros</div>
+      <ul id="log-list">
+        <li class="log-empty" id="log-empty">Nenhum registro ainda</li>
+      </ul>
+    </div>
+
+    <!-- Gerador de QR Codes -->
+    <div class="card">
+      <div class="card-title">🪪 Gerar QR Codes dos Colaboradores</div>
+      <div id="qr-section">
+        <label>Nomes (um por linha)</label>
+        <textarea id="emp-names" rows="4"
+          style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:.88rem;resize:vertical;background:var(--bg);"
+          placeholder="João Silva&#10;Maria Santos&#10;Carlos Oliveira"></textarea>
+        <button class="btn btn-primary" onclick="generateQRs()" style="margin-top:10px;">Gerar QR Codes</button>
+        <button class="btn btn-sm" onclick="printQRs()" style="margin-top:8px;width:100%;justify-content:center;display:flex;">🖨 Imprimir Crachás</button>
+        <div id="qr-output"></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<div id="status-bar">
+  <div class="dot-live"></div>
+  <span id="status-text">Aguardando início do scanner</span>
+  <span style="margin-left:auto;" id="today-date"></span>
+</div>
+
+<!-- QRCode lib — gera SVG puro, sem canvas -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+
+<script>
+// ── RELÓGIO ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const d = now.toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
+  const t = now.toLocaleTimeString('pt-BR');
+  document.getElementById('clock').innerHTML = `${t}<br><span style="font-size:.72rem;opacity:.6">${d}</span>`;
+  document.getElementById('today-date').textContent = now.toLocaleDateString('pt-BR');
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── CÂMERAS ───────────────────────────────────────────────────────────────────
+async function loadCameras() {
+  try {
+    const devices = await Html5Qrcode.getCameras();
+    const sel = document.getElementById('camera-select');
+    devices.forEach((d, i) => {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.label || `Câmera ${i+1}`;
+      sel.appendChild(opt);
+    });
+  } catch(e) { console.warn('Câmeras:', e); }
+}
+loadCameras();
+
+// ── SCANNER ───────────────────────────────────────────────────────────────────
+let html5QrCode = null;
+let scanning = false;
+let lastCode = null;
+let lastTime = 0;
+
+async function toggleScanner() {
+  if (!scanning) await startScanner();
+  else           await stopScanner();
+}
+
+async function startScanner() {
+  const cameraId = document.getElementById('camera-select').value;
+  html5QrCode = new Html5Qrcode("reader");
+  document.getElementById('scan-placeholder').style.display = 'none';
+  document.getElementById('scan-beam').style.display = 'block';
+
+  try {
+    await html5QrCode.start(
+      cameraId || { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      onScanSuccess,
+      () => {}
+    );
+    scanning = true;
+    document.getElementById('btn-icon').textContent = '⏹';
+    document.getElementById('btn-label').textContent = 'Parar Scanner';
+    document.getElementById('btn-start').style.background = '#c62828';
+    setStatus('Scanner ativo — aguardando leitura', true);
+  } catch(e) {
+    showFeedback(false, 'Erro ao acessar câmera: ' + e.message);
+  }
+}
+
+async function stopScanner() {
+  if (html5QrCode) { await html5QrCode.stop(); html5QrCode = null; }
+  scanning = false;
+  document.getElementById('btn-icon').textContent = '▶';
+  document.getElementById('btn-label').textContent = 'Iniciar Scanner';
+  document.getElementById('btn-start').style.background = '';
+  document.getElementById('scan-beam').style.display = 'none';
+  document.getElementById('scan-placeholder').style.display = 'block';
+  setStatus('Scanner pausado');
+}
+
+// ── LEITURA ───────────────────────────────────────────────────────────────────
+async function onScanSuccess(decodedText) {
+  const now = Date.now();
+  // Evita leitura dupla em menos de 3 seg
+  if (decodedText === lastCode && now - lastTime < 3000) return;
+  lastCode = decodedText;
+  lastTime = now;
+
+  // Espera formato: "SSB|NOME_COMPLETO|ID" ou apenas o nome
+  let name, empId;
+  if (decodedText.startsWith('SSB|')) {
+    const parts = decodedText.split('|');
+    name  = parts[1] || decodedText;
+    empId = parts[2] || '';
+  } else {
+    name  = decodedText;
+    empId = '';
+  }
+
+  const meal  = document.getElementById('meal-type').value;
+  const ts    = new Date();
+  const dateStr = ts.toLocaleDateString('pt-BR');
+  const timeStr = ts.toLocaleTimeString('pt-BR');
+
+  // Adiciona ao log local
+  addToLog(name, empId, dateStr, timeStr, meal, true);
+  showFeedback(true, name, `${meal} — ${dateStr} ${timeStr}`);
+  setStatus(`Último registro: ${name} às ${timeStr}`);
+
+  // Envia ao Google Sheets
+  sendToSheet({ name, empId, date: dateStr, time: timeStr, meal });
+}
+
+// ── ENVIO AO GOOGLE SHEETS ────────────────────────────────────────────────────
+async function sendToSheet(data) {
+  const url = document.getElementById('webhook-url').value.trim();
+  if (!url) return; // Sem URL configurada, só salva local
+
+  try {
+    await fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  } catch(e) {
+    console.warn('Erro ao enviar:', e);
+  }
+}
+
+// ── LOG LOCAL ─────────────────────────────────────────────────────────────────
+let logEntries = [];
+
+function addToLog(name, empId, date, time, meal, ok) {
+  logEntries.unshift({ name, empId, date, time, meal, ok });
+  renderLog();
+}
+
+function renderLog() {
+  const list = document.getElementById('log-list');
+  const empty = document.getElementById('log-empty');
+  list.innerHTML = '';
+
+  if (logEntries.length === 0) {
+    list.innerHTML = '<li class="log-empty" id="log-empty">Nenhum registro ainda</li>';
+    document.getElementById('log-count').textContent = '0 registros';
+    return;
+  }
+
+  document.getElementById('log-count').textContent = `${logEntries.length} registro${logEntries.length>1?'s':''}`;
+
+  logEntries.forEach(e => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <div class="dot ${e.ok?'':'err'}"></div>
+      <div class="name">${e.name}</div>
+      <div style="font-size:.75rem;color:#888">${e.meal}</div>
+      <div class="time">${e.time}</div>
+    `;
+    list.appendChild(li);
+  });
+}
+
+function clearLog() {
+  if (!confirm('Limpar todos os registros locais?')) return;
+  logEntries = [];
+  renderLog();
+}
+
+// ── EXPORT CSV ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  if (!logEntries.length) { alert('Nenhum registro para exportar.'); return; }
+  const rows = [['Nome','ID','Data','Hora','Refeição']];
+  logEntries.forEach(e => rows.push([e.name, e.empId, e.date, e.time, e.meal]));
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `refeitorio_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ── FEEDBACK ──────────────────────────────────────────────────────────────────
+let feedbackTimer;
+function showFeedback(ok, name, sub) {
+  const el = document.getElementById('feedback');
+  clearTimeout(feedbackTimer);
+  el.className = 'feedback-' + (ok ? 'ok' : 'err');
+  el.style.display = 'block';
+  el.innerHTML = ok
+    ? `<div style="display:flex;gap:10px;align-items:center;">
+        <span style="font-size:1.6rem">✅</span>
+        <div><div class="feedback-name">${name}</div><div class="feedback-time">${sub}</div></div>
+       </div>`
+    : `<div style="display:flex;gap:10px;align-items:center;">
+        <span style="font-size:1.6rem">❌</span>
+        <div><div class="feedback-name">${name}</div></div>
+       </div>`;
+  feedbackTimer = setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+// ── STATUS ────────────────────────────────────────────────────────────────────
+function setStatus(msg) {
+  document.getElementById('status-text').textContent = msg;
+}
+
+// ── GERADOR DE QR CODES ───────────────────────────────────────────────────────
+// QRious gera base64 PNG diretamente via canvas interno — sem DOM assíncrono
+function makeQRBase64(text) {
+  const qr = new QRious({
+    value: text,
+    size: 160,
+    foreground: '#1B5E20',
+    background: '#ffffff',
+  });
+  return qr.toDataURL('image/png');
+}
+
+// Armazena os dados para impressão
+let qrData = [];
+
+function generateQRs() {
+  const raw = document.getElementById('emp-names').value.trim();
+  if (!raw) { alert('Insira pelo menos um nome.'); return; }
+  const names = raw.split('\n').map(n => n.trim()).filter(Boolean);
+  const out = document.getElementById('qr-output');
+  out.innerHTML = '';
+  qrData = [];
+
+  names.forEach((name, i) => {
+    const empId = String(i + 1).padStart(3, '0');
+    const payload = `SSB|${name}|${empId}`;
+    const src = makeQRBase64(payload);
+
+    qrData.push({ src, name, id: empId });
+
+    const wrap = document.createElement('div');
+    wrap.className = 'qr-card';
+    wrap.innerHTML = `
+      <img src="${src}" alt="QR ${name}" style="width:100px;height:100px;">
+      <div class="qr-name">${name}</div>
+      <div class="qr-id">ID: ${empId}</div>`;
+    out.appendChild(wrap);
+  });
+}
+
+function printQRs() {
+  if (!qrData.length) { alert('Gere os QR Codes primeiro.'); return; }
+
+  const w = window.open('', '_blank');
+  w.document.write(`
+    <html><head><title>Crachás SS&B</title>
+    <style>
+      body { font-family: sans-serif; display:flex; flex-wrap:wrap; gap:16px; padding:20px; background:#fff; }
+      .qr-card { border:1px solid #ccc; border-radius:8px; padding:12px; text-align:center; width:150px; break-inside:avoid; }
+      .qr-card img { width:120px; height:120px; display:block; margin:0 auto; }
+      .brand { font-size:9px; color:#1B5E20; font-weight:bold; margin-bottom:6px; letter-spacing:1px; }
+      .name  { font-size:11px; font-weight:700; color:#1B5E20; margin-top:8px; }
+      .id    { font-size:8px; color:#999; margin-top:2px; }
+      @media print { body { padding:8px; gap:10px; } }
+    </style></head><body>
+    ${qrData.map(c => `
+      <div class="qr-card">
+        <div class="brand">SS&B CONSTRUTORA</div>
+        <img src="${c.src}">
+        <div class="name">${c.name}</div>
+        <div class="id">ID: ${c.id}</div>
+      </div>`).join('')}
+    </body></html>
+  `);
+  w.document.close();
+  setTimeout(() => w.print(), 400);
+}
+</script>
+</body>
+</html>
