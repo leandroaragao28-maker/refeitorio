@@ -379,17 +379,20 @@
     <div class="card">
       <div class="card-title">⚙ Configuração</div>
 
-      <label>Cadastro de Colaboradores (CSV)</label>
-      <div style="background:var(--bg);border:1px dashed var(--border);border-radius:10px;padding:14px;text-align:center;margin-bottom:4px;">
-        <div style="font-size:.8rem;color:var(--text-sub);margin-bottom:10px;">
-          CSV com colunas: <strong>CPF, Nome, DataRescisao</strong><br>
-          <span style="font-size:.72rem;opacity:.7">DataRescisao vazia = ativo | preenchida = desligado</span>
+      <label>Cadastro de Colaboradores</label>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:4px;">
+        <div id="cadastro-status" style="font-size:.82rem;color:var(--text-sub);margin-bottom:10px;text-align:center;">
+          ⏳ Carregando cadastro...
         </div>
-        <input type="file" id="cadastro-file" accept=".csv" style="display:none" onchange="onCadastroUpload(event)">
-        <button class="btn-sm" onclick="document.getElementById('cadastro-file').click()" style="width:100%;justify-content:center;display:flex;padding:10px;">
-          📂 Selecionar arquivo CSV
-        </button>
-        <div id="cadastro-status" style="font-size:.75rem;color:var(--text-sub);margin-top:8px;">Nenhum cadastro carregado</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-sm" onclick="carregarDoDrive()" style="flex:1;justify-content:center;display:flex;padding:10px;">
+            🔄 Atualizar do Drive
+          </button>
+          <input type="file" id="cadastro-file" accept=".csv" style="display:none" onchange="onCadastroUpload(event)">
+          <button class="btn-sm" onclick="document.getElementById('cadastro-file').click()" style="flex:1;justify-content:center;display:flex;padding:10px;">
+            📂 Arquivo local
+          </button>
+        </div>
       </div>
 
       <label>Nome deste Terminal</label>
@@ -480,6 +483,9 @@ async function loadCameras() {
 }
 loadCameras();
 
+// Carrega cadastro automaticamente ao abrir
+carregarDoDrive();
+
 // ── SCANNER ───────────────────────────────────────────────────────────────────
 let html5QrCode = null;
 let scanning = false;
@@ -544,8 +550,7 @@ function carregarCadastro(csvText) {
   });
   const total  = Object.keys(cadastro).length;
   const ativos = Object.values(cadastro).filter(c => !c.demitido).length;
-  setStatus(`Cadastro: ${ativos} ativos, ${total - ativos} desligados`);
-  alert(`✅ Cadastro carregado!\n${ativos} colaboradores ativos\n${total - ativos} desligados`);
+  setCadastroStatus(`✅ <strong>${ativos} ativos</strong> · ${total - ativos} desligados · atualizado ${new Date().toLocaleTimeString('pt-BR')}`);
 }
 
 // ── DECODIFICAÇÃO DO QR CODE ──────────────────────────────────────────────────
@@ -639,6 +644,9 @@ async function onScanSuccess(decodedText) {
 }
 
 // ── ENVIO AO GOOGLE SHEETS ────────────────────────────────────────────────────
+// Usa no-cors pois o Apps Script não suporta CORS customizado.
+// A verificação de duplicata entre terminais é feita no servidor (Apps Script),
+// que usa LockService para serializar acessos simultâneos.
 async function sendToSheet(data) {
   const url = document.getElementById('webhook-url').value.trim();
   if (!url) return;
@@ -646,23 +654,12 @@ async function sendToSheet(data) {
   const terminal = document.getElementById('terminal-name').value.trim() || 'Terminal 1';
 
   try {
-    const res = await fetch(url, {
+    await fetch(url, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...data, terminal })
     });
-    const json = await res.json();
-
-    if (json.status === 'duplicate') {
-      // Outro terminal já registrou este colaborador — desfaz o registro local
-      const chave = `${data.cpf || data.name}|${data.meal}|${data.date}`;
-      registrosSessao.add(chave); // garante que fica bloqueado localmente também
-      // Remove do log local se foi adicionado
-      logEntries = logEntries.filter(e => !(e.name === data.name && e.meal === data.meal && e.date === data.date));
-      renderLog();
-      showFeedback('dup', data.name, 'Já registrado em outro terminal');
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-    }
   } catch (e) {
     console.warn('Envio:', e);
   }
@@ -738,17 +735,36 @@ function setStatus(msg) {
   document.getElementById('status-text').textContent = msg;
 }
 
-// ── UPLOAD CADASTRO CSV ───────────────────────────────────────────────────────
+// ── CADASTRO VIA GOOGLE DRIVE ────────────────────────────────────────────────
+const CADASTRO_DRIVE_URL = 'https://drive.google.com/uc?export=download&id=1FhiEuzls408EDga49sNhiWMWMMudbxo6';
+
+async function carregarDoDrive() {
+  setCadastroStatus('⏳ Atualizando cadastro do Drive...');
+  try {
+    // Usa proxy público para evitar bloqueio de CORS do Google Drive
+    const proxy = 'https://corsproxy.io/?' + encodeURIComponent(CADASTRO_DRIVE_URL);
+    const res = await fetch(proxy);
+    if (!res.ok) throw new Error('Erro HTTP ' + res.status);
+    const text = await res.text();
+    carregarCadastro(text);
+  } catch (e) {
+    setCadastroStatus('❌ Falha ao carregar do Drive. Use "Arquivo local".');
+    console.warn('Drive:', e);
+  }
+}
+
+function setCadastroStatus(msg) {
+  document.getElementById('cadastro-status').innerHTML = msg;
+  setStatus(msg.replace(/<[^>]+>/g, ''));
+}
+
+// ── UPLOAD CADASTRO LOCAL (fallback) ─────────────────────────────────────────
 function onCadastroUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
     carregarCadastro(e.target.result);
-    const total  = Object.keys(cadastro).length;
-    const ativos = Object.values(cadastro).filter(c => !c.demitido).length;
-    document.getElementById('cadastro-status').innerHTML =
-      `✅ <strong>${file.name}</strong> — ${ativos} ativos, ${total - ativos} desligados`;
   };
   reader.readAsText(file, 'UTF-8');
 }
