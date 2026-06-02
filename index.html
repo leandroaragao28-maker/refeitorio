@@ -3,9 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+<!-- PWA -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Refeitório">
+<meta name="application-name" content="SS&B Refeitório">
+<meta name="theme-color" content="#1B5E20">
+<meta name="msapplication-TileColor" content="#1B5E20">
+<meta name="msapplication-TileImage" content="icon-144.png">
+
+<!-- Manifest -->
+<link rel="manifest" href="manifest.json">
+
+<!-- Ícones Apple (iOS) -->
+<link rel="apple-touch-icon" href="icon-152.png">
+<link rel="apple-touch-icon" sizes="72x72"   href="icon-72.png">
+<link rel="apple-touch-icon" sizes="96x96"   href="icon-96.png">
+<link rel="apple-touch-icon" sizes="128x128" href="icon-128.png">
+<link rel="apple-touch-icon" sizes="144x144" href="icon-144.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icon-152.png">
+<link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
+
+<!-- Ícone favicon -->
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+
+<!-- Splash screen iOS -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
 <title>SS&B — Refeitório</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
@@ -410,6 +438,10 @@
       <input type="number" id="scan-interval" value="3" min="1" max="30">
 
       <button class="btn-primary" onclick="saveConfig()">💾 Salvar Configurações</button>
+      <button class="btn-primary" id="btn-instalar" onclick="instalarApp()"
+              style="display:none;background:#1565C0;margin-top:8px;">
+        📲 Instalar como Aplicativo
+      </button>
     </div>
 
     <div class="card">
@@ -844,6 +876,37 @@ function printQRs() {
   w.document.close();
   setTimeout(() => w.print(), 400);
 }
+</script>
+<script>
+// ── SERVICE WORKER (PWA) ──────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('SW registrado:', reg.scope))
+      .catch(err => console.warn('SW erro:', err));
+  });
+}
+
+// ── PROMPT DE INSTALAÇÃO ──────────────────────────────────────────────────────
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('btn-instalar').style.display = 'flex';
+});
+
+function instalarApp() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => {
+    deferredPrompt = null;
+    document.getElementById('btn-instalar').style.display = 'none';
+  });
+}
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('btn-instalar').style.display = 'none';
+});
 </script>
 </body>
 </html>
