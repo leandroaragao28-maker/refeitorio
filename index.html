@@ -562,7 +562,9 @@ function decodificarQR(raw) {
     if (decoded.includes(':')) {
       const parts = decoded.split(':');
       // CPF completo é o campo com 11 dígitos
-      const cpf = parts.find(p => /^\d{11}$/.test(p)) || '';
+      // Normaliza para 11 dígitos com zero à esquerda
+      const cpfRaw = parts.find(p => /^\d{9,11}$/.test(p)) || '';
+      const cpf    = cpfRaw.padStart(11, '0');
       return { tipo: 'base64', cpf, raw: decoded };
     }
   } catch (e) { /* não é Base64 */ }
