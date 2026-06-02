@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SS&B — Refeitório</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
+
+  :root {
+    --green-dark:   #1B5E20;
+    --green-mid:    #2E7D32;
+    --green-light:  #4CAF50;
+    --green-pale:   #E8F5E9;
+    --green-accent: #69F0AE;
+    --text-main:    #1a1a1a;
+    --text-sub:     #666;
+    --bg:           #f0f4f0;
+    --card:         #ffffff;
+    --border:       #d0e4d2;
+    --red:          #c62828;
+    --red-pale:     #ffebee;
+    --tab-h:        56px;
+    --header-h:     64px;
+    --status-h:     36px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text-main);
+    overflow: hidden;
+  }
+
+  /* ══ HEADER ══════════════════════════════════════════════════════ */
+  header {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: var(--header-h);
+    background: var(--green-dark);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.3);
+    z-index: 100;
+  }
+  .brand {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem; letter-spacing: 3px;
+    color: var(--green-accent);
+    line-height: 1;
+  }
+  .brand span { display: block; font-family: 'DM Sans', sans-serif; font-size: .62rem; letter-spacing: 1.5px; color: rgba(255,255,255,.6); font-weight: 400; margin-top: 2px; }
+  #clock { color: rgba(255,255,255,.85); font-size: .82rem; text-align: right; line-height: 1.4; font-weight: 300; }
+
+  /* ══ ABAS ════════════════════════════════════════════════════════ */
+  #tabs {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: var(--tab-h);
+    background: white;
+    border-top: 1px solid var(--border);
+    display: flex;
+    z-index: 100;
+    box-shadow: 0 -2px 12px rgba(0,0,0,.08);
+  }
+  .tab {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; border: none; background: none; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-size: .65rem; font-weight: 500;
+    color: #aaa; transition: color .2s;
+    padding: 6px 0;
+  }
+  .tab .tab-icon { font-size: 1.4rem; line-height: 1; }
+  .tab.active { color: var(--green-dark); }
+  .tab.active .tab-icon { transform: scale(1.1); }
+
+  /* ══ CONTEÚDO ════════════════════════════════════════════════════ */
+  #content {
+    position: fixed;
+    top: var(--header-h);
+    bottom: var(--tab-h);
+    left: 0; right: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .page { display: none; padding: 16px; min-height: 100%; }
+  .page.active { display: block; }
+
+  /* ══ CARDS ═══════════════════════════════════════════════════════ */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.05);
+  }
+  .card-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem; letter-spacing: 2px;
+    color: var(--green-dark);
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--green-pale);
+  }
+
+  /* ══ SCANNER PAGE ════════════════════════════════════════════════ */
+  #scanner-wrap {
+    border-radius: 16px;
+    overflow: hidden;
+    background: #0a0a0a;
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    max-height: 340px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 14px;
+    border: 2px solid #222;
+  }
+  #reader { width: 100%; height: 100%; }
+
+  /* cantos decorativos */
+  .corner { position: absolute; width: 24px; height: 24px; z-index: 5; }
+  .corner-tl { top: 12px; left: 12px;  border-top: 3px solid var(--green-accent); border-left: 3px solid var(--green-accent); border-radius: 4px 0 0 0; }
+  .corner-tr { top: 12px; right: 12px; border-top: 3px solid var(--green-accent); border-right: 3px solid var(--green-accent); border-radius: 0 4px 0 0; }
+  .corner-bl { bottom: 12px; left: 12px;  border-bottom: 3px solid var(--green-accent); border-left: 3px solid var(--green-accent); border-radius: 0 0 0 4px; }
+  .corner-br { bottom: 12px; right: 12px; border-bottom: 3px solid var(--green-accent); border-right: 3px solid var(--green-accent); border-radius: 0 0 4px 0; }
+
+  #scan-beam {
+    display: none; position: absolute; left: 10%; right: 10%;
+    height: 2px; background: var(--green-accent);
+    box-shadow: 0 0 10px var(--green-accent), 0 0 20px var(--green-accent);
+    animation: beam 2s ease-in-out infinite; z-index: 10;
+  }
+  @keyframes beam { 0%,100%{top:15%} 50%{top:82%} }
+
+  .scan-placeholder {
+    color: #555; text-align: center; padding: 30px 20px; font-size: .85rem;
+  }
+  .scan-placeholder .icon { font-size: 3rem; margin-bottom: 10px; opacity: .4; }
+
+  /* Seletor de refeição compacto */
+  .meal-row {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
+  }
+  .meal-btn {
+    flex: 1; min-width: 70px;
+    padding: 10px 6px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    background: white;
+    font-family: 'DM Sans', sans-serif;
+    font-size: .78rem; font-weight: 600;
+    color: var(--text-sub);
+    cursor: pointer; text-align: center;
+    transition: all .15s;
+  }
+  .meal-btn .meal-icon { display: block; font-size: 1.3rem; margin-bottom: 2px; }
+  .meal-btn.active {
+    border-color: var(--green-mid);
+    background: var(--green-pale);
+    color: var(--green-dark);
+  }
+
+  /* Botão scanner grande */
+  #btn-start {
+    width: 100%; padding: 16px;
+    border-radius: 14px; border: none;
+    background: var(--green-mid);
+    color: white;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem; letter-spacing: 2px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+    transition: background .2s;
+    box-shadow: 0 4px 14px rgba(46,125,50,.35);
+  }
+  #btn-start:active { transform: scale(.98); }
+
+  /* ══ FEEDBACK GRANDE ═════════════════════════════════════════════ */
+  #feedback {
+    border-radius: 16px; padding: 18px 16px;
+    display: none; animation: popIn .25s ease;
+    margin-top: 14px;
+  }
+  @keyframes popIn { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:none} }
+  .feedback-ok    { background: var(--green-pale); border: 2px solid var(--green-light); }
+  .feedback-err   { background: var(--red-pale);   border: 2px solid var(--red); }
+  .feedback-dup   { background: #FFF8E1; border: 2px solid #F9A825; }
+  .feedback-block { background: var(--red-pale);   border: 2px solid var(--red); }
+  .feedback-warn  { background: #FFF3E0; border: 2px solid #E65100; }
+  .feedback-dup .feedback-name  { color: #F57F17; }
+  .feedback-block .feedback-name { color: var(--red); }
+  .feedback-warn .feedback-name  { color: #BF360C; }
+  .feedback-emoji { font-size: 2.8rem; text-align: center; margin-bottom: 6px; }
+  .feedback-name  { font-size: 1.5rem; font-weight: 700; text-align: center; color: var(--green-dark); }
+  .feedback-sub   { font-size: .82rem; text-align: center; color: var(--text-sub); margin-top: 4px; }
+  .feedback-err .feedback-name { color: var(--red); }
+
+  /* ══ LOG PAGE ════════════════════════════════════════════════════ */
+  .log-header-row {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+  }
+  #log-count { font-size: .82rem; color: var(--text-sub); }
+  .btn-row { display: flex; gap: 8px; }
+
+  .btn-sm {
+    padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--green-pale); color: var(--green-dark);
+    font-family: 'DM Sans', sans-serif; font-size: .78rem; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-sm:active { background: var(--green-light); color: white; }
+
+  #log-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  #log-list li {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px; background: var(--bg); border: 1px solid var(--border);
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green-light); flex-shrink: 0; }
+  .dot.err { background: var(--red); }
+  .log-name { font-weight: 600; flex: 1; font-size: .9rem; }
+  .log-meal { font-size: .72rem; color: var(--text-sub); }
+  .log-time { font-size: .75rem; color: var(--text-sub); white-space: nowrap; }
+  .log-empty { text-align: center; color: #bbb; font-size: .85rem; padding: 40px 0; }
+
+  /* ══ CONFIG PAGE ════════════════════════════════════════════════ */
+  label { font-size: .8rem; font-weight: 500; color: var(--text-sub); display: block; margin-bottom: 5px; margin-top: 14px; }
+  input, select, textarea {
+    width: 100%; padding: 11px 13px;
+    border: 1px solid var(--border); border-radius: 10px;
+    font-family: 'DM Sans', sans-serif; font-size: .9rem;
+    background: var(--bg); color: var(--text-main);
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--green-light); }
+
+  .btn-primary {
+    width: 100%; padding: 14px;
+    border-radius: 12px; border: none;
+    background: var(--green-mid); color: white;
+    font-family: 'DM Sans', sans-serif; font-size: 1rem; font-weight: 600;
+    cursor: pointer; margin-top: 14px;
+  }
+  .btn-primary:active { background: var(--green-dark); }
+
+  /* QR output */
+  #qr-output { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; justify-content: flex-start; }
+  .qr-card {
+    background: white; border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px; text-align: center; width: calc(50% - 6px);
+  }
+  .qr-card img { width: 100%; max-width: 120px; height: auto; display: block; margin: 0 auto; }
+  .qr-name { font-size: .78rem; font-weight: 600; margin-top: 6px; color: var(--green-dark); word-break: break-word; }
+  .qr-id   { font-size: .65rem; color: #999; }
+
+  /* ══ STATUS BAR ══════════════════════════════════════════════════ */
+  #status-bar {
+    position: fixed; top: var(--header-h); left: 0; right: 0;
+    background: rgba(27,94,32,.92); backdrop-filter: blur(4px);
+    color: rgba(255,255,255,.8); font-size: .7rem;
+    padding: 5px 14px;
+    display: flex; gap: 8px; align-items: center;
+    z-index: 99;
+  }
+  .dot-live { width: 7px; height: 7px; border-radius: 50%; background: var(--green-accent); animation: pulse 1.5s infinite; flex-shrink: 0; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+  /* ajuste do content para a status bar */
+  #content { top: calc(var(--header-h) + 26px); }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div>
+    <div class="brand">SS&B<span>Controle de Refeitório</span></div>
+  </div>
+  <div id="clock"></div>
+</header>
+
+<!-- STATUS BAR -->
+<div id="status-bar">
+  <div class="dot-live"></div>
+  <span id="status-text">Pronto</span>
+</div>
+
+<!-- CONTEÚDO DAS PÁGINAS -->
+<div id="content">
+
+  <!-- ── ABA: SCANNER ── -->
+  <div class="page active" id="page-scanner">
+
+    <!-- Seletor de refeição -->
+    <div class="meal-row">
+      <button class="meal-btn" data-meal="Café da Manhã" onclick="selectMeal(this)">
+        <span class="meal-icon">☕</span>Café
+      </button>
+      <button class="meal-btn active" data-meal="Almoço" onclick="selectMeal(this)">
+        <span class="meal-icon">🍽</span>Almoço
+      </button>
+      <button class="meal-btn" data-meal="Jantar" onclick="selectMeal(this)">
+        <span class="meal-icon">🌙</span>Jantar
+      </button>
+      <button class="meal-btn" data-meal="Lanche" onclick="selectMeal(this)">
+        <span class="meal-icon">🥪</span>Lanche
+      </button>
+    </div>
+
+    <!-- Visor da câmera -->
+    <div id="scanner-wrap">
+      <div class="corner corner-tl"></div>
+      <div class="corner corner-tr"></div>
+      <div class="corner corner-bl"></div>
+      <div class="corner corner-br"></div>
+      <div id="scan-beam"></div>
+      <div class="scan-placeholder" id="scan-placeholder">
+        <div class="icon">📷</div>
+        Toque em <strong>INICIAR</strong><br>para ativar a câmera
+      </div>
+      <div id="reader"></div>
+    </div>
+
+    <!-- Feedback -->
+    <div id="feedback"></div>
+
+    <!-- Botão principal -->
+    <button id="btn-start" onclick="toggleScanner()">
+      <span id="btn-icon">▶</span>
+      <span id="btn-label">INICIAR SCANNER</span>
+    </button>
+
+  </div>
+
+  <!-- ── ABA: REGISTROS ── -->
+  <div class="page" id="page-log">
+    <div class="card">
+      <div class="log-header-row">
+        <div>
+          <div class="card-title" style="margin-bottom:4px;border:none;padding:0;">📋 Registros de Hoje</div>
+          <div id="log-count">0 registros</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-sm" onclick="exportCSV()">⬇ CSV</button>
+          <button class="btn-sm" onclick="clearLog()">🗑</button>
+        </div>
+      </div>
+      <ul id="log-list">
+        <li class="log-empty">Nenhum registro ainda</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ── ABA: QR CODES ── -->
+  <div class="page" id="page-qr">
+    <div class="card">
+      <div class="card-title">🪪 Gerar QR Codes</div>
+      <label>Nomes dos colaboradores (um por linha)</label>
+      <textarea id="emp-names" rows="5" placeholder="João Silva&#10;Maria Santos&#10;Carlos Oliveira"></textarea>
+      <button class="btn-primary" onclick="generateQRs()">✦ Gerar QR Codes</button>
+      <button class="btn-primary" onclick="printQRs()" style="background:var(--green-dark);margin-top:8px;">🖨 Imprimir Crachás</button>
+      <div id="qr-output"></div>
+    </div>
+  </div>
+
+  <!-- ── ABA: CONFIG ── -->
+  <div class="page" id="page-config">
+    <div class="card">
+      <div class="card-title">⚙ Configuração</div>
+
+      <label>Cadastro de Colaboradores (CSV)</label>
+      <div style="background:var(--bg);border:1px dashed var(--border);border-radius:10px;padding:14px;text-align:center;margin-bottom:4px;">
+        <div style="font-size:.8rem;color:var(--text-sub);margin-bottom:10px;">
+          CSV com colunas: <strong>CPF, Nome, DataRescisao</strong><br>
+          <span style="font-size:.72rem;opacity:.7">DataRescisao vazia = ativo | preenchida = desligado</span>
+        </div>
+        <input type="file" id="cadastro-file" accept=".csv" style="display:none" onchange="onCadastroUpload(event)">
+        <button class="btn-sm" onclick="document.getElementById('cadastro-file').click()" style="width:100%;justify-content:center;display:flex;padding:10px;">
+          📂 Selecionar arquivo CSV
+        </button>
+        <div id="cadastro-status" style="font-size:.75rem;color:var(--text-sub);margin-top:8px;">Nenhum cadastro carregado</div>
+      </div>
+
+      <label>Nome deste Terminal</label>
+      <input type="text" id="terminal-name" value="Terminal 1" placeholder="Ex: Terminal 1, Terminal Obra A">
+
+      <label>URL do Google Apps Script</label>
+      <input type="url" id="webhook-url" value="https://script.google.com/macros/s/AKfycbzh1h6jhqE_IC4TqEpp_JRRdviovOHo8BbZiVBm6IYLi2HCo_EY81j7eBVElM0IiKhT/exec">
+
+      <label>Câmera preferida</label>
+      <select id="camera-select">
+        <option value="">Câmera traseira (padrão)</option>
+      </select>
+
+      <label>Intervalo mínimo entre leituras (segundos)</label>
+      <input type="number" id="scan-interval" value="3" min="1" max="30">
+
+      <button class="btn-primary" onclick="saveConfig()">💾 Salvar Configurações</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">ℹ Sobre</div>
+      <p style="font-size:.82rem;color:var(--text-sub);line-height:1.6;">
+        Sistema de controle de refeitório SS&amp;B Construtora.<br>
+        Registros salvos em Google Sheets via Apps Script.<br><br>
+        <strong>Formato do QR Code:</strong><br>
+        <code style="background:var(--bg);padding:4px 8px;border-radius:6px;font-size:.78rem;">SSB|Nome Completo|ID</code>
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ABAS DE NAVEGAÇÃO -->
+<nav id="tabs">
+  <button class="tab active" onclick="goTo('scanner', this)">
+    <span class="tab-icon">📷</span>Scanner
+  </button>
+  <button class="tab" onclick="goTo('log', this)">
+    <span class="tab-icon">📋</span>Registros
+  </button>
+  <button class="tab" onclick="goTo('qr', this)">
+    <span class="tab-icon">🪪</span>QR Codes
+  </button>
+  <button class="tab" onclick="goTo('config', this)">
+    <span class="tab-icon">⚙</span>Config
+  </button>
+</nav>
+
+<script>
+// ── NAVEGAÇÃO ────────────────────────────────────────────────────────────────
+function goTo(page, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── RELÓGIO ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const t = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const d = now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  document.getElementById('clock').innerHTML = `<strong>${t}</strong><br><span style="font-size:.65rem;opacity:.6">${d}</span>`;
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── REFEIÇÃO ─────────────────────────────────────────────────────────────────
+let currentMeal = 'Almoço';
+function selectMeal(btn) {
+  document.querySelectorAll('.meal-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentMeal = btn.dataset.meal;
+}
+
+// ── CÂMERAS ───────────────────────────────────────────────────────────────────
+async function loadCameras() {
+  try {
+    const devices = await Html5Qrcode.getCameras();
+    const sel = document.getElementById('camera-select');
+    devices.forEach((d, i) => {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.label || `Câmera ${i + 1}`;
+      sel.appendChild(opt);
+    });
+  } catch (e) { console.warn('Câmeras:', e); }
+}
+loadCameras();
+
+// ── SCANNER ───────────────────────────────────────────────────────────────────
+let html5QrCode = null;
+let scanning = false;
+let lastCode = null;
+let lastTime = 0;
+
+async function toggleScanner() {
+  if (!scanning) await startScanner();
+  else           await stopScanner();
+}
+
+async function startScanner() {
+  const cameraId = document.getElementById('camera-select').value;
+  html5QrCode = new Html5Qrcode("reader");
+  document.getElementById('scan-placeholder').style.display = 'none';
+  document.getElementById('scan-beam').style.display = 'block';
+
+  const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+  const camConfig = cameraId ? cameraId : { facingMode: "environment" };
+
+  try {
+    await html5QrCode.start(camConfig, config, onScanSuccess, () => {});
+    scanning = true;
+    document.getElementById('btn-icon').textContent = '⏹';
+    document.getElementById('btn-label').textContent = 'PARAR SCANNER';
+    document.getElementById('btn-start').style.background = '#c62828';
+    setStatus('Scanner ativo — aguardando leitura');
+  } catch (e) {
+    showFeedback(false, 'Erro ao acessar câmera', e.message);
+    document.getElementById('scan-placeholder').style.display = 'block';
+    document.getElementById('scan-beam').style.display = 'none';
+  }
+}
+
+async function stopScanner() {
+  if (html5QrCode) { await html5QrCode.stop(); html5QrCode = null; }
+  scanning = false;
+  document.getElementById('btn-icon').textContent = '▶';
+  document.getElementById('btn-label').textContent = 'INICIAR SCANNER';
+  document.getElementById('btn-start').style.background = '';
+  document.getElementById('scan-beam').style.display = 'none';
+  document.getElementById('scan-placeholder').style.display = 'block';
+  setStatus('Scanner pausado');
+}
+
+// ── CADASTRO DE COLABORADORES (carregado da planilha) ─────────────────────────
+// Formato: { "03618045395": { nome: "ADRIANO DA SILVA", demitido: false } }
+let cadastro = {};
+
+function carregarCadastro(csvText) {
+  // Espera CSV com colunas: CPF, Nome, DataRescisao (vazia = ativo)
+  const lines = csvText.trim().split('\n').slice(1); // pula cabeçalho
+  cadastro = {};
+  lines.forEach(line => {
+    const cols = line.split(',').map(c => c.replace(/"/g, '').trim());
+    const cpf      = (cols[0] || '').replace(/\D/g, ''); // só dígitos — aceita com ou sem pontuação
+    const nome     = cols[1] || '';
+    const rescisao = (cols[2] || '').trim();
+    if (cpf && nome) {
+      cadastro[cpf] = { nome, demitido: rescisao !== '' };
+    }
+  });
+  const total  = Object.keys(cadastro).length;
+  const ativos = Object.values(cadastro).filter(c => !c.demitido).length;
+  setStatus(`Cadastro: ${ativos} ativos, ${total - ativos} desligados`);
+  alert(`✅ Cadastro carregado!\n${ativos} colaboradores ativos\n${total - ativos} desligados`);
+}
+
+// ── DECODIFICAÇÃO DO QR CODE ──────────────────────────────────────────────────
+function decodificarQR(raw) {
+  // Tenta Base64 (formato dos QR Codes SS&B existentes)
+  try {
+    const decoded = atob(raw);
+    // Formato: campo1:campo2:cpf:flag  ex: 09572788:03618045395:005195:1
+    if (decoded.includes(':')) {
+      const parts = decoded.split(':');
+      // CPF completo é o campo com 11 dígitos
+      const cpf = parts.find(p => /^\d{11}$/.test(p)) || '';
+      return { tipo: 'base64', cpf, raw: decoded };
+    }
+  } catch (e) { /* não é Base64 */ }
+
+  // Formato SSB gerado pelo app
+  if (raw.startsWith('SSB|')) {
+    const parts = raw.split('|');
+    return { tipo: 'ssb', nome: parts[1] || raw, empId: parts[2] || '', cpf: '' };
+  }
+
+  // Texto puro (fallback)
+  return { tipo: 'texto', nome: raw, cpf: '' };
+}
+
+// ── REGISTROS DA SESSÃO (controle de duplicatas) ──────────────────────────────
+// Chave: "cpf_ou_nome|refeição|data"  →  impede repetição na mesma refeição/dia
+const registrosSessao = new Set();
+
+// ── LEITURA ───────────────────────────────────────────────────────────────────
+async function onScanSuccess(decodedText) {
+  const now = Date.now();
+  const interval = (parseInt(document.getElementById('scan-interval').value) || 3) * 1000;
+  if (decodedText === lastCode && now - lastTime < interval) return;
+  lastCode = decodedText;
+  lastTime = now;
+
+  const qr = decodificarQR(decodedText);
+  const ts      = new Date();
+  const dateStr = ts.toLocaleDateString('pt-BR');
+  const timeStr = ts.toLocaleTimeString('pt-BR');
+
+  // ── Resolve nome e valida ──
+  let nome, empId, cpf;
+  cpf   = qr.cpf || '';
+  empId = qr.empId || cpf;
+
+  if (cpf && Object.keys(cadastro).length > 0) {
+    // Tem cadastro carregado → valida pelo CPF
+    const colaborador = cadastro[cpf];
+
+    if (!colaborador) {
+      showFeedback('warn', 'CPF não encontrado', `CPF: ${cpf}`);
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      return;
+    }
+
+    if (colaborador.demitido) {
+      showFeedback('block', colaborador.nome, 'Colaborador desligado — acesso negado');
+      if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+      setStatus(`Bloqueado: ${colaborador.nome} (desligado)`);
+      return;
+    }
+
+    nome = colaborador.nome;
+
+  } else if (qr.nome) {
+    // Sem cadastro carregado → usa nome do QR
+    nome = qr.nome;
+  } else {
+    nome = cpf || decodedText;
+  }
+
+  // ── Verifica duplicata na mesma refeição/dia ──
+  const chave = `${cpf || nome}|${currentMeal}|${dateStr}`;
+  if (registrosSessao.has(chave)) {
+    showFeedback('dup', nome, `Já registrado em ${currentMeal} hoje`);
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    setStatus(`Duplicata bloqueada: ${nome}`);
+    return;
+  }
+
+  // ── Registra ──
+  registrosSessao.add(chave);
+  addToLog(nome, empId, dateStr, timeStr, currentMeal, true);
+  showFeedback('ok', nome, `${currentMeal} — ${timeStr}`);
+  setStatus(`Último: ${nome} às ${timeStr}`);
+  sendToSheet({ name: nome, empId, cpf, date: dateStr, time: timeStr, meal: currentMeal });
+  if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+}
+
+// ── ENVIO AO GOOGLE SHEETS ────────────────────────────────────────────────────
+async function sendToSheet(data) {
+  const url = document.getElementById('webhook-url').value.trim();
+  if (!url) return;
+
+  const terminal = document.getElementById('terminal-name').value.trim() || 'Terminal 1';
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, terminal })
+    });
+    const json = await res.json();
+
+    if (json.status === 'duplicate') {
+      // Outro terminal já registrou este colaborador — desfaz o registro local
+      const chave = `${data.cpf || data.name}|${data.meal}|${data.date}`;
+      registrosSessao.add(chave); // garante que fica bloqueado localmente também
+      // Remove do log local se foi adicionado
+      logEntries = logEntries.filter(e => !(e.name === data.name && e.meal === data.meal && e.date === data.date));
+      renderLog();
+      showFeedback('dup', data.name, 'Já registrado em outro terminal');
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    }
+  } catch (e) {
+    console.warn('Envio:', e);
+  }
+}
+
+// ── LOG ───────────────────────────────────────────────────────────────────────
+let logEntries = [];
+
+function addToLog(name, empId, date, time, meal, ok) {
+  logEntries.unshift({ name, empId, date, time, meal, ok });
+  renderLog();
+}
+
+function renderLog() {
+  const list = document.getElementById('log-list');
+  if (!logEntries.length) {
+    list.innerHTML = '<li class="log-empty">Nenhum registro ainda</li>';
+    document.getElementById('log-count').textContent = '0 registros';
+    return;
+  }
+  document.getElementById('log-count').textContent = `${logEntries.length} registro${logEntries.length > 1 ? 's' : ''}`;
+  list.innerHTML = logEntries.map(e => `
+    <li>
+      <div class="dot ${e.ok ? '' : 'err'}"></div>
+      <div>
+        <div class="log-name">${e.name}</div>
+        <div class="log-meal">${e.meal}</div>
+      </div>
+      <div class="log-time">${e.time}</div>
+    </li>`).join('');
+}
+
+function clearLog() {
+  if (!confirm('Limpar todos os registros locais?')) return;
+  logEntries = [];
+  renderLog();
+}
+
+function exportCSV() {
+  if (!logEntries.length) { alert('Nenhum registro para exportar.'); return; }
+  const rows = [['Nome', 'ID', 'Data', 'Hora', 'Refeição']];
+  logEntries.forEach(e => rows.push([e.name, e.empId, e.date, e.time, e.meal]));
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `refeitorio_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+}
+
+// ── FEEDBACK ──────────────────────────────────────────────────────────────────
+let feedbackTimer;
+const feedbackCfg = {
+  ok:    { cls: 'feedback-ok',    emoji: '✅', dur: 4000 },
+  dup:   { cls: 'feedback-dup',   emoji: '🔁', dur: 5000 },
+  block: { cls: 'feedback-block', emoji: '🚫', dur: 5000 },
+  warn:  { cls: 'feedback-warn',  emoji: '⚠️', dur: 5000 },
+};
+function showFeedback(tipo, name, sub) {
+  const el = document.getElementById('feedback');
+  clearTimeout(feedbackTimer);
+  const cfg = feedbackCfg[tipo] || feedbackCfg.ok;
+  el.className = cfg.cls;
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div class="feedback-emoji">${cfg.emoji}</div>
+    <div class="feedback-name">${name}</div>
+    <div class="feedback-sub">${sub || ''}</div>`;
+  feedbackTimer = setTimeout(() => { el.style.display = 'none'; }, cfg.dur);
+}
+
+function setStatus(msg) {
+  document.getElementById('status-text').textContent = msg;
+}
+
+// ── UPLOAD CADASTRO CSV ───────────────────────────────────────────────────────
+function onCadastroUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    carregarCadastro(e.target.result);
+    const total  = Object.keys(cadastro).length;
+    const ativos = Object.values(cadastro).filter(c => !c.demitido).length;
+    document.getElementById('cadastro-status').innerHTML =
+      `✅ <strong>${file.name}</strong> — ${ativos} ativos, ${total - ativos} desligados`;
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+function saveConfig() {
+  alert('Configurações salvas!');
+}
+
+// ── QR CODES ──────────────────────────────────────────────────────────────────
+let qrData = [];
+
+function makeQRBase64(text) {
+  const qr = new QRious({ value: text, size: 200, foreground: '#1B5E20', background: '#ffffff' });
+  return qr.toDataURL('image/png');
+}
+
+function generateQRs() {
+  const raw = document.getElementById('emp-names').value.trim();
+  if (!raw) { alert('Insira pelo menos um nome.'); return; }
+  const names = raw.split('\n').map(n => n.trim()).filter(Boolean);
+  const out = document.getElementById('qr-output');
+  out.innerHTML = '';
+  qrData = [];
+
+  names.forEach((name, i) => {
+    const empId = String(i + 1).padStart(3, '0');
+    const payload = `SSB|${name}|${empId}`;
+    const src = makeQRBase64(payload);
+    qrData.push({ src, name, id: empId });
+
+    const wrap = document.createElement('div');
+    wrap.className = 'qr-card';
+    wrap.innerHTML = `
+      <img src="${src}" alt="QR ${name}">
+      <div class="qr-name">${name}</div>
+      <div class="qr-id">ID: ${empId}</div>`;
+    out.appendChild(wrap);
+  });
+}
+
+function printQRs() {
+  if (!qrData.length) { alert('Gere os QR Codes primeiro.'); return; }
+  const w = window.open('', '_blank');
+  w.document.write(`
+    <html><head><title>Crachás SS&B</title>
+    <style>
+      body { font-family: sans-serif; display:flex; flex-wrap:wrap; gap:12px; padding:16px; background:#fff; }
+      .qr-card { border:1px solid #ccc; border-radius:10px; padding:12px; text-align:center; width:150px; break-inside:avoid; }
+      .qr-card img { width:120px; height:120px; display:block; margin:0 auto; }
+      .brand { font-size:8px; color:#1B5E20; font-weight:bold; margin-bottom:6px; letter-spacing:1px; }
+      .name  { font-size:11px; font-weight:700; color:#1B5E20; margin-top:8px; }
+      .id    { font-size:8px; color:#999; margin-top:2px; }
+      @media print { body{padding:6px;gap:8px;} }
+    </style></head><body>
+    ${qrData.map(c => `
+      <div class="qr-card">
+        <div class="brand">SS&B CONSTRUTORA</div>
+        <img src="${c.src}">
+        <div class="name">${c.name}</div>
+        <div class="id">ID: ${c.id}</div>
+      </div>`).join('')}
+    </body></html>`);
+  w.document.close();
+  setTimeout(() => w.print(), 400);
+}
+</script>
+</body>
+</html>
