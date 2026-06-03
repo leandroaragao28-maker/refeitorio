@@ -342,8 +342,7 @@
   .btn-icon-sm:hover { background: var(--green-pale); }
   .btn-icon-sm.del:hover { background: var(--red-pale); }
 
-  /* modal overlay flex */
-  #modal-overlay.open { display: flex; }
+  /* sem regra .open — controlado por style.display no JS */
 </style>
 </head>
 <body>
@@ -583,6 +582,7 @@
           <table id="relatorio-tabela" style="width:100%;border-collapse:collapse;font-size:.82rem;">
             <thead>
               <tr style="background:var(--green-dark);color:white;text-align:left;">
+                <th style="padding:10px 8px;text-align:center;width:36px;">#</th>
                 <th style="padding:10px 12px;">Nome</th>
                 <th style="padding:10px 8px;">Refeição</th>
                 <th style="padding:10px 8px;">Data</th>
@@ -1227,7 +1227,8 @@ function renderRelatorio(rows) {
   const tbody = document.getElementById('relatorio-tbody');
   tbody.innerHTML = rows.map((r, i) => `
     <tr>
-      <td>${r.nome || '—'}</td>
+      <td style="text-align:center;color:var(--text-sub);font-size:.75rem;font-weight:400;">${i + 1}</td>
+      <td style="font-weight:600;">${r.nome || '—'}</td>
       <td><span style="font-size:.72rem;background:var(--green-pale);color:var(--green-dark);
            border-radius:6px;padding:2px 7px;white-space:nowrap;">${r.refeicao || '—'}</span></td>
       <td style="white-space:nowrap;">${r.data || '—'}</td>
@@ -1271,7 +1272,7 @@ function abrirModalNovo() {
   document.getElementById('modal-hora').value    = new Date().toTimeString().slice(0, 5);
   document.getElementById('modal-terminal').value = document.getElementById('terminal-name').value || 'Terminal 1';
   document.getElementById('modal-erro').style.display = 'none';
-  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('modal-overlay').style.display = 'flex';
 }
 
 function abrirModalEdicao(idx) {
@@ -1291,11 +1292,11 @@ function abrirModalEdicao(idx) {
   document.getElementById('modal-hora').value    = (r.hora || '').slice(0, 5);
   document.getElementById('modal-terminal').value = r.terminal || '';
   document.getElementById('modal-erro').style.display = 'none';
-  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('modal-overlay').style.display = 'flex';
 }
 
 function fecharModal() {
-  document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('modal-overlay').style.display = 'none';
 }
 
 // Fecha modal clicando fora
@@ -1330,19 +1331,20 @@ async function salvarRegistro() {
 
   document.getElementById('modal-erro').style.display = 'none';
 
+  // Usa no-cors (mesmo padrão do scanner) — Apps Script não suporta CORS em POST
+  // Operação otimista: fecha modal e recarrega a tabela após envio
   try {
-    const res  = await fetch(url, {
+    await fetch(url, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const json = await res.json();
-    if (json.status !== 'ok') throw new Error(json.message || 'Erro no servidor');
-
     fecharModal();
-    buscarRelatorio(); // recarrega a tabela
+    // Aguarda 1.2s para o Apps Script processar antes de recarregar
+    setTimeout(() => buscarRelatorio(), 1200);
   } catch (e) {
-    mostrarErroModal('Falha ao salvar: ' + e.message);
+    mostrarErroModal('Falha de rede ao salvar. Verifique a conexão.');
   }
 }
 
@@ -1355,16 +1357,15 @@ async function excluirRegistro(idx) {
   if (!url) { alert('URL do Apps Script não configurada.'); return; }
 
   try {
-    const res  = await fetch(url, {
+    await fetch(url, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ acao: 'excluir', rowId: r.rowId })
     });
-    const json = await res.json();
-    if (json.status !== 'ok') throw new Error(json.message || 'Erro no servidor');
-    buscarRelatorio();
+    setTimeout(() => buscarRelatorio(), 1200);
   } catch (e) {
-    alert('Falha ao excluir: ' + e.message);
+    alert('Falha de rede ao excluir. Verifique a conexão.');
   }
 }
 
