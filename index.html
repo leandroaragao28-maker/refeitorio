@@ -400,7 +400,7 @@
       <label>Nomes dos colaboradores (um por linha)</label>
       <textarea id="emp-names" rows="5" placeholder="João Silva&#10;Maria Santos&#10;Carlos Oliveira"></textarea>
       <button class="btn-primary" onclick="generateQRs()">✦ Gerar QR Codes</button>
-      <button class="btn-primary" onclick="printQRs()" style="background:var(--green-dark);margin-top:8px;">🖨 Imprimir Crachás</button>
+      <button class="btn-primary" onclick="exportPDF()" style="background:var(--green-dark);margin-top:8px;">📄 Gerar e Exportar PDF</button>
       <div id="qr-output"></div>
     </div>
   </div>
@@ -429,8 +429,7 @@
       <label>Nome deste Terminal</label>
       <input type="text" id="terminal-name" value="Terminal 1" placeholder="Ex: Terminal 1, Terminal Obra A">
 
-      <label>URL do Google Apps Script</label>
-      <input type="url" id="webhook-url" value="https://script.google.com/macros/s/AKfycbzh1h6jhqE_IC4TqEpp_JRRdviovOHo8BbZiVBm6IYLi2HCo_EY81j7eBVElM0IiKhT/exec">
+      <input type="url" id="webhook-url" value="https://script.google.com/macros/s/AKfycbzh1h6jhqE_IC4TqEpp_JRRdviovOHo8BbZiVBm6IYLi2HCo_EY81j7eBVElM0IiKhT/exec" style="display:none">
 
       <label>Câmera preferida</label>
       <select id="camera-select">
@@ -585,7 +584,7 @@ function carregarCadastro(csvText) {
   });
   const total  = Object.keys(cadastro).length;
   const ativos = Object.values(cadastro).filter(c => !c.demitido).length;
-  setCadastroStatus(`✅ <strong>${ativos} ativos</strong> · ${total - ativos} desligados · atualizado ${new Date().toLocaleTimeString('pt-BR')}`);
+  setCadastroStatus(`✅ Cadastro carregado · ${new Date().toLocaleTimeString('pt-BR')}`);
 }
 
 // ── DECODIFICAÇÃO DO QR CODE ──────────────────────────────────────────────────
@@ -793,7 +792,7 @@ async function carregarDoDrive() {
 
     const total  = Object.keys(cadastro).length;
     const ativos = Object.values(cadastro).filter(c => !c.demitido).length;
-    setCadastroStatus(`✅ <strong>${ativos} ativos</strong> · ${total - ativos} desligados · ${new Date().toLocaleTimeString('pt-BR')}`);
+    setCadastroStatus(`✅ Cadastro carregado · ${new Date().toLocaleTimeString('pt-BR')}`);
 
   } catch (e) {
     setCadastroStatus('❌ Falha ao carregar. Use "Arquivo local".');
@@ -854,7 +853,7 @@ function generateQRs() {
   });
 }
 
-function printQRs() {
+function exportPDF() {
   if (!qrData.length) { alert('Gere os QR Codes primeiro.'); return; }
   const w = window.open('', '_blank');
   w.document.write(`
@@ -879,6 +878,26 @@ function printQRs() {
   w.document.close();
   setTimeout(() => w.print(), 400);
 }
+
+// ── NOME DO TERMINAL (preenchimento automático) ───────────────────────────────
+async function detectarNomeTerminal() {
+  const campo = document.getElementById('terminal-name');
+  // Não sobrescreve se o usuário já preencheu algo diferente do padrão
+  if (campo.value && campo.value !== 'Terminal 1') return;
+  try {
+    // Tenta obter modelo do dispositivo via API moderna (Chrome/Edge)
+    if (navigator.userAgentData) {
+      const data = await navigator.userAgentData.getHighEntropyValues(['model', 'platform']);
+      if (data.model) { campo.value = data.model; return; }
+      if (data.platform) { campo.value = `Terminal ${data.platform}`; return; }
+    }
+    // Fallback: extrai nome do sistema operacional do userAgent
+    const ua = navigator.userAgent;
+    const match = ua.match(/Windows NT[\s/][\d.]+|Mac OS X[\s_][\d_.]+|Android[\s/][\d.]+|Linux/i);
+    if (match) campo.value = `Terminal ${match[0].replace(/_/g, '.')}`;
+  } catch (e) { /* mantém valor padrão */ }
+}
+detectarNomeTerminal();
 </script>
 <script>
 // ── SERVICE WORKER (PWA) ──────────────────────────────────────────────────────
