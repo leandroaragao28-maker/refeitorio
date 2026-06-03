@@ -309,6 +309,41 @@
 
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ══ PIN ═════════════════════════════════════════════════════════ */
+  .pin-btn {
+    padding: 16px; border-radius: 12px; border: 1px solid var(--border);
+    background: white; font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem; color: var(--green-dark); cursor: pointer;
+    transition: background .12s, transform .1s;
+    box-shadow: 0 2px 6px rgba(0,0,0,.06);
+  }
+  .pin-btn:active { background: var(--green-pale); transform: scale(.94); }
+  .pin-clear { background: var(--red-pale); color: var(--red); }
+  .pin-ok    { background: var(--green-pale); color: var(--green-dark); }
+
+  /* ══ STATS ═══════════════════════════════════════════════════════ */
+  .stat-box {
+    flex: 1; min-width: 70px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 8px; text-align: center;
+  }
+  .stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: var(--green-dark); line-height: 1; }
+  .stat-lbl { font-size: .68rem; color: var(--text-sub); margin-top: 2px; }
+
+  /* ══ TABELA RELATÓRIO ════════════════════════════════════════════ */
+  #relatorio-tabela tbody tr:nth-child(even) { background: var(--bg); }
+  #relatorio-tabela tbody tr:hover { background: var(--green-pale); }
+  #relatorio-tabela td { padding: 9px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  #relatorio-tabela td:first-child { padding-left: 12px; font-weight: 600; }
+  .btn-icon-sm {
+    border: none; background: none; cursor: pointer; font-size: 1rem;
+    padding: 4px 6px; border-radius: 6px; transition: background .12s;
+  }
+  .btn-icon-sm:hover { background: var(--green-pale); }
+  .btn-icon-sm.del:hover { background: var(--red-pale); }
+
+  /* modal overlay flex */
+  #modal-overlay.open { display: flex; }
 </style>
 </head>
 <body>
@@ -457,6 +492,168 @@
     </div>
   </div>
 
+  <!-- ── ABA: RELATÓRIOS (protegida por PIN) ── -->
+  <div class="page" id="page-relatorio">
+
+    <!-- TELA DE PIN -->
+    <div id="pin-wall">
+      <div class="card" style="max-width:340px;margin:40px auto;">
+        <div class="card-title" style="text-align:center;">🔒 Área Restrita</div>
+        <p style="font-size:.82rem;color:var(--text-sub);text-align:center;margin-bottom:18px;line-height:1.5;">
+          Informe o PIN de administrador para acessar os relatórios.
+        </p>
+        <div id="pin-display" style="
+          font-family:'Bebas Neue',sans-serif;font-size:2.4rem;letter-spacing:12px;
+          text-align:center;color:var(--green-dark);background:var(--bg);
+          border:2px solid var(--border);border-radius:14px;padding:14px 0;
+          margin-bottom:16px;min-height:62px;
+        ">·&nbsp;·&nbsp;·&nbsp;·</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+          <button class="pin-btn" onclick="pinPress('1')">1</button>
+          <button class="pin-btn" onclick="pinPress('2')">2</button>
+          <button class="pin-btn" onclick="pinPress('3')">3</button>
+          <button class="pin-btn" onclick="pinPress('4')">4</button>
+          <button class="pin-btn" onclick="pinPress('5')">5</button>
+          <button class="pin-btn" onclick="pinPress('6')">6</button>
+          <button class="pin-btn" onclick="pinPress('7')">7</button>
+          <button class="pin-btn" onclick="pinPress('8')">8</button>
+          <button class="pin-btn" onclick="pinPress('9')">9</button>
+          <button class="pin-btn pin-clear" onclick="pinClear()">⌫</button>
+          <button class="pin-btn" onclick="pinPress('0')">0</button>
+          <button class="pin-btn pin-ok" onclick="pinConfirm()">✓</button>
+        </div>
+        <div id="pin-error" style="display:none;color:var(--red);font-size:.78rem;text-align:center;margin-top:10px;">
+          PIN incorreto. Tente novamente.
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTEÚDO DOS RELATÓRIOS (oculto até autenticar) -->
+    <div id="relatorio-content" style="display:none;">
+
+      <!-- Filtros -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">🔍 Filtros</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="margin-top:0;">Data início</label>
+            <input type="date" id="filtro-de">
+          </div>
+          <div>
+            <label style="margin-top:0;">Data fim</label>
+            <input type="date" id="filtro-ate">
+          </div>
+        </div>
+        <label>Refeição</label>
+        <select id="filtro-refeicao">
+          <option value="">Todas</option>
+          <option>Café da Manhã</option>
+          <option>Almoço</option>
+          <option>Jantar</option>
+          <option>Lanche</option>
+        </select>
+        <label>Nome / CPF</label>
+        <input type="text" id="filtro-nome" placeholder="Buscar por nome ou CPF...">
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button class="btn-primary" onclick="buscarRelatorio()" style="margin-top:0;flex:1;">🔍 Buscar</button>
+          <button class="btn-sm" onclick="exportarRelatorioCSV()" style="padding:14px 16px;">⬇ CSV</button>
+        </div>
+      </div>
+
+      <!-- Sumário -->
+      <div id="relatorio-resumo" style="display:none;" class="card">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <div class="stat-box"><div class="stat-num" id="stat-total">0</div><div class="stat-lbl">Registros</div></div>
+          <div class="stat-box"><div class="stat-num" id="stat-cafe">0</div><div class="stat-lbl">Café</div></div>
+          <div class="stat-box"><div class="stat-num" id="stat-almoco">0</div><div class="stat-lbl">Almoço</div></div>
+          <div class="stat-box"><div class="stat-num" id="stat-jantar">0</div><div class="stat-lbl">Jantar</div></div>
+          <div class="stat-box"><div class="stat-num" id="stat-lanche">0</div><div class="stat-lbl">Lanche</div></div>
+        </div>
+      </div>
+
+      <!-- Tabela -->
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div id="relatorio-loading" style="text-align:center;padding:30px;color:var(--text-sub);font-size:.85rem;display:none;">
+          ⏳ Carregando registros...
+        </div>
+        <div id="relatorio-vazio" style="text-align:center;padding:40px;color:#bbb;font-size:.85rem;">
+          Use os filtros acima e clique em Buscar.
+        </div>
+        <div id="relatorio-tabela-wrap" style="display:none;overflow-x:auto;">
+          <table id="relatorio-tabela" style="width:100%;border-collapse:collapse;font-size:.82rem;">
+            <thead>
+              <tr style="background:var(--green-dark);color:white;text-align:left;">
+                <th style="padding:10px 12px;">Nome</th>
+                <th style="padding:10px 8px;">Refeição</th>
+                <th style="padding:10px 8px;">Data</th>
+                <th style="padding:10px 8px;">Hora</th>
+                <th style="padding:10px 8px;">Terminal</th>
+                <th style="padding:10px 8px;text-align:center;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="relatorio-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Botão novo registro -->
+      <button class="btn-primary" onclick="abrirModalNovo()" style="margin-bottom:14px;">
+        ＋ Novo Registro Manual
+      </button>
+
+      <!-- Botão sair -->
+      <button class="btn-sm" onclick="sairRelatorio()" style="width:100%;text-align:center;padding:12px;margin-bottom:14px;">
+        🔒 Sair da área restrita
+      </button>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL EDIÇÃO / CRIAÇÃO ────────────────────────────────────────────────── -->
+<div id="modal-overlay" style="
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);
+  z-index:200;align-items:center;justify-content:center;padding:16px;
+">
+  <div style="
+    background:white;border-radius:20px;width:100%;max-width:400px;
+    padding:22px;box-shadow:0 8px 32px rgba(0,0,0,.25);
+    max-height:90vh;overflow-y:auto;
+  ">
+    <div class="card-title" id="modal-titulo" style="margin-bottom:16px;">Editar Registro</div>
+    <input type="hidden" id="modal-row-id">
+
+    <label style="margin-top:0;">Nome</label>
+    <input type="text" id="modal-nome" placeholder="Nome completo">
+
+    <label>CPF</label>
+    <input type="text" id="modal-cpf" placeholder="00000000000">
+
+    <label>Refeição</label>
+    <select id="modal-refeicao">
+      <option>Café da Manhã</option>
+      <option>Almoço</option>
+      <option>Jantar</option>
+      <option>Lanche</option>
+    </select>
+
+    <label>Data</label>
+    <input type="date" id="modal-data">
+
+    <label>Hora</label>
+    <input type="time" id="modal-hora">
+
+    <label>Terminal</label>
+    <input type="text" id="modal-terminal" placeholder="Terminal 1">
+
+    <div id="modal-erro" style="display:none;color:var(--red);font-size:.78rem;margin-top:10px;"></div>
+
+    <div style="display:flex;gap:10px;margin-top:18px;">
+      <button class="btn-sm" onclick="fecharModal()" style="flex:1;padding:13px;text-align:center;">Cancelar</button>
+      <button class="btn-primary" onclick="salvarRegistro()" style="flex:2;margin-top:0;">💾 Salvar</button>
+    </div>
+  </div>
 </div>
 
 <!-- ABAS DE NAVEGAÇÃO -->
@@ -472,6 +669,9 @@
   </button>
   <button class="tab" onclick="goTo('config', this)">
     <span class="tab-icon">⚙</span>Config
+  </button>
+  <button class="tab" onclick="goToRelatorio(this)">
+    <span class="tab-icon">📊</span>Relatórios
   </button>
 </nav>
 
@@ -900,6 +1100,280 @@ async function detectarNomeTerminal() {
 detectarNomeTerminal();
 </script>
 <script>
+// ── RELATÓRIOS — PIN ─────────────────────────────────────────────────────────
+const ADMIN_PIN = '1234'; // altere aqui para definir o PIN
+let pinBuffer = '';
+let relatorioAutenticado = false;
+
+function goToRelatorio(btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-relatorio').classList.add('active');
+  btn.classList.add('active');
+  if (!relatorioAutenticado) {
+    document.getElementById('pin-wall').style.display = 'block';
+    document.getElementById('relatorio-content').style.display = 'none';
+    pinBuffer = '';
+    atualizarPinDisplay();
+  }
+}
+
+function pinPress(d) {
+  if (pinBuffer.length >= 6) return;
+  pinBuffer += d;
+  atualizarPinDisplay();
+  document.getElementById('pin-error').style.display = 'none';
+  if (pinBuffer.length === ADMIN_PIN.length) pinConfirm();
+}
+
+function pinClear() {
+  pinBuffer = pinBuffer.slice(0, -1);
+  atualizarPinDisplay();
+}
+
+function atualizarPinDisplay() {
+  const el = document.getElementById('pin-display');
+  const len = ADMIN_PIN.length;
+  el.textContent = Array.from({ length: len }, (_, i) =>
+    i < pinBuffer.length ? '●' : '·'
+  ).join('  ');
+}
+
+function pinConfirm() {
+  if (pinBuffer === ADMIN_PIN) {
+    relatorioAutenticado = true;
+    document.getElementById('pin-wall').style.display = 'none';
+    document.getElementById('relatorio-content').style.display = 'block';
+    // define datas padrão (hoje)
+    const hoje = new Date().toISOString().slice(0, 10);
+    document.getElementById('filtro-de').value = hoje;
+    document.getElementById('filtro-ate').value = hoje;
+  } else {
+    document.getElementById('pin-error').style.display = 'block';
+    pinBuffer = '';
+    atualizarPinDisplay();
+  }
+}
+
+function sairRelatorio() {
+  relatorioAutenticado = false;
+  relatorioRegistros = [];
+  document.getElementById('pin-wall').style.display = 'block';
+  document.getElementById('relatorio-content').style.display = 'none';
+  document.getElementById('relatorio-tabela-wrap').style.display = 'none';
+  document.getElementById('relatorio-vazio').style.display = 'block';
+  document.getElementById('relatorio-resumo').style.display = 'none';
+  pinBuffer = '';
+  atualizarPinDisplay();
+}
+
+// ── RELATÓRIOS — BUSCA ────────────────────────────────────────────────────────
+let relatorioRegistros = [];
+
+async function buscarRelatorio() {
+  const url = document.getElementById('webhook-url').value.trim();
+  if (!url) { alert('URL do Apps Script não configurada.'); return; }
+
+  const de   = document.getElementById('filtro-de').value;
+  const ate  = document.getElementById('filtro-ate').value;
+  const ref  = document.getElementById('filtro-refeicao').value;
+  const nome = document.getElementById('filtro-nome').value.trim();
+
+  document.getElementById('relatorio-loading').style.display = 'block';
+  document.getElementById('relatorio-tabela-wrap').style.display = 'none';
+  document.getElementById('relatorio-vazio').style.display = 'none';
+  document.getElementById('relatorio-resumo').style.display = 'none';
+
+  try {
+    const params = new URLSearchParams({ acao: 'relatorio', de, ate });
+    if (ref)  params.append('refeicao', ref);
+    if (nome) params.append('nome', nome);
+
+    const res  = await fetch(url + '?' + params.toString());
+    const json = await res.json();
+    if (json.status !== 'ok') throw new Error(json.message || 'Erro no servidor');
+
+    relatorioRegistros = json.registros || [];
+    renderRelatorio(relatorioRegistros);
+  } catch (e) {
+    document.getElementById('relatorio-loading').style.display = 'none';
+    document.getElementById('relatorio-vazio').style.display = 'block';
+    document.getElementById('relatorio-vazio').textContent = '❌ Falha ao carregar: ' + e.message;
+    console.warn('Relatório:', e);
+  }
+}
+
+function renderRelatorio(rows) {
+  document.getElementById('relatorio-loading').style.display = 'none';
+
+  if (!rows.length) {
+    document.getElementById('relatorio-vazio').style.display = 'block';
+    document.getElementById('relatorio-vazio').textContent = 'Nenhum registro encontrado para os filtros selecionados.';
+    document.getElementById('relatorio-tabela-wrap').style.display = 'none';
+    document.getElementById('relatorio-resumo').style.display = 'none';
+    return;
+  }
+
+  // Sumário
+  const cnt = (ref) => rows.filter(r => r.refeicao === ref).length;
+  document.getElementById('stat-total').textContent  = rows.length;
+  document.getElementById('stat-cafe').textContent   = cnt('Café da Manhã');
+  document.getElementById('stat-almoco').textContent = cnt('Almoço');
+  document.getElementById('stat-jantar').textContent = cnt('Jantar');
+  document.getElementById('stat-lanche').textContent = cnt('Lanche');
+  document.getElementById('relatorio-resumo').style.display = 'block';
+
+  // Tabela
+  const tbody = document.getElementById('relatorio-tbody');
+  tbody.innerHTML = rows.map((r, i) => `
+    <tr>
+      <td>${r.nome || '—'}</td>
+      <td><span style="font-size:.72rem;background:var(--green-pale);color:var(--green-dark);
+           border-radius:6px;padding:2px 7px;white-space:nowrap;">${r.refeicao || '—'}</span></td>
+      <td style="white-space:nowrap;">${r.data || '—'}</td>
+      <td style="white-space:nowrap;">${r.hora || '—'}</td>
+      <td style="font-size:.75rem;color:var(--text-sub);">${r.terminal || '—'}</td>
+      <td style="text-align:center;white-space:nowrap;">
+        <button class="btn-icon-sm" title="Editar" onclick="abrirModalEdicao(${i})">✏️</button>
+        <button class="btn-icon-sm del" title="Excluir" onclick="excluirRegistro(${i})">🗑</button>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('relatorio-tabela-wrap').style.display = 'block';
+  document.getElementById('relatorio-vazio').style.display = 'none';
+}
+
+function exportarRelatorioCSV() {
+  if (!relatorioRegistros.length) { alert('Nenhum registro carregado. Faça uma busca primeiro.'); return; }
+  const rows = [['Nome', 'CPF', 'Refeição', 'Data', 'Hora', 'Terminal']];
+  relatorioRegistros.forEach(r => rows.push([r.nome, r.cpf || '', r.refeicao, r.data, r.hora, r.terminal || '']));
+  const csv  = rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `relatorio_refeitorio_${document.getElementById('filtro-de').value}_${document.getElementById('filtro-ate').value}.csv`;
+  a.click();
+}
+
+// ── RELATÓRIOS — MODAL ────────────────────────────────────────────────────────
+let modalModo = 'novo'; // 'novo' | 'editar'
+let modalIdx  = -1;
+
+function abrirModalNovo() {
+  modalModo = 'novo';
+  modalIdx  = -1;
+  document.getElementById('modal-titulo').textContent = '＋ Novo Registro Manual';
+  document.getElementById('modal-row-id').value  = '';
+  document.getElementById('modal-nome').value    = '';
+  document.getElementById('modal-cpf').value     = '';
+  document.getElementById('modal-refeicao').value = 'Almoço';
+  document.getElementById('modal-data').value    = new Date().toISOString().slice(0, 10);
+  document.getElementById('modal-hora').value    = new Date().toTimeString().slice(0, 5);
+  document.getElementById('modal-terminal').value = document.getElementById('terminal-name').value || 'Terminal 1';
+  document.getElementById('modal-erro').style.display = 'none';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function abrirModalEdicao(idx) {
+  const r = relatorioRegistros[idx];
+  if (!r) return;
+  modalModo = 'editar';
+  modalIdx  = idx;
+  document.getElementById('modal-titulo').textContent = '✏️ Editar Registro';
+  document.getElementById('modal-row-id').value  = r.rowId || '';
+  document.getElementById('modal-nome').value    = r.nome || '';
+  document.getElementById('modal-cpf').value     = r.cpf  || '';
+  document.getElementById('modal-refeicao').value = r.refeicao || 'Almoço';
+  // converte data BR (dd/mm/yyyy) → yyyy-mm-dd para o input date
+  const partes = (r.data || '').split('/');
+  document.getElementById('modal-data').value =
+    partes.length === 3 ? `${partes[2]}-${partes[1]}-${partes[0]}` : r.data || '';
+  document.getElementById('modal-hora').value    = (r.hora || '').slice(0, 5);
+  document.getElementById('modal-terminal').value = r.terminal || '';
+  document.getElementById('modal-erro').style.display = 'none';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function fecharModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// Fecha modal clicando fora
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModal();
+});
+
+async function salvarRegistro() {
+  const url = document.getElementById('webhook-url').value.trim();
+  if (!url) { mostrarErroModal('URL do Apps Script não configurada.'); return; }
+
+  const nome     = document.getElementById('modal-nome').value.trim();
+  const cpf      = document.getElementById('modal-cpf').value.trim().replace(/\D/g, '');
+  const refeicao = document.getElementById('modal-refeicao').value;
+  const dataISO  = document.getElementById('modal-data').value;   // yyyy-mm-dd
+  const hora     = document.getElementById('modal-hora').value;
+  const terminal = document.getElementById('modal-terminal').value.trim() || 'Manual';
+  const rowId    = document.getElementById('modal-row-id').value;
+
+  if (!nome) { mostrarErroModal('Informe o nome do colaborador.'); return; }
+  if (!dataISO) { mostrarErroModal('Informe a data.'); return; }
+
+  // Converte data para formato BR antes de enviar
+  const [y, m, d] = dataISO.split('-');
+  const dataBR = `${d}/${m}/${y}`;
+
+  const payload = {
+    acao: modalModo === 'editar' ? 'editar' : 'inserir',
+    rowId, nome, cpf, refeicao,
+    data: dataBR, hora, terminal
+  };
+
+  document.getElementById('modal-erro').style.display = 'none';
+
+  try {
+    const res  = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (json.status !== 'ok') throw new Error(json.message || 'Erro no servidor');
+
+    fecharModal();
+    buscarRelatorio(); // recarrega a tabela
+  } catch (e) {
+    mostrarErroModal('Falha ao salvar: ' + e.message);
+  }
+}
+
+async function excluirRegistro(idx) {
+  const r = relatorioRegistros[idx];
+  if (!r) return;
+  if (!confirm(`Excluir registro de "${r.nome}" (${r.refeicao} em ${r.data})?`)) return;
+
+  const url = document.getElementById('webhook-url').value.trim();
+  if (!url) { alert('URL do Apps Script não configurada.'); return; }
+
+  try {
+    const res  = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'excluir', rowId: r.rowId })
+    });
+    const json = await res.json();
+    if (json.status !== 'ok') throw new Error(json.message || 'Erro no servidor');
+    buscarRelatorio();
+  } catch (e) {
+    alert('Falha ao excluir: ' + e.message);
+  }
+}
+
+function mostrarErroModal(msg) {
+  const el = document.getElementById('modal-erro');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
 // ── SERVICE WORKER (PWA) ──────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
