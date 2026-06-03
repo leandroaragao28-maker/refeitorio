@@ -1,5 +1,5 @@
 // SS&B Refeitório — Service Worker
-const CACHE = 'ssb-refeitorio-v3';
+const CACHE = 'ssb-refeitorio-v4';
 
 // Recursos que devem SEMPRE ser buscados na rede primeiro (HTML principal)
 const NETWORK_FIRST = ['index.html', '/refeitorio/', '/refeitorio/index.html'];
@@ -22,6 +22,9 @@ self.addEventListener('activate', e => {
 // Fetch — estratégia híbrida
 self.addEventListener('fetch', e => {
   const url = e.request.url;
+
+  // Ignora URLs que não sejam http/https (ex: chrome-extension://)
+  if (!url.startsWith('http')) return;
 
   // Apps Script e APIs externas: sempre rede, sem cache
   if (url.includes('script.google.com')) return;
