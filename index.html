@@ -302,7 +302,22 @@
     z-index: 99;
   }
   .dot-live { width: 7px; height: 7px; border-radius: 50%; background: var(--green-accent); animation: pulse 1.5s infinite; flex-shrink: 0; }
+  .dot-offline { width: 7px; height: 7px; border-radius: 50%; background: #FF5252; flex-shrink: 0; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
+  #offline-badge {
+    display: none; margin-left: auto;
+    background: #FF5252; color: white;
+    font-size: .65rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 10px;
+    letter-spacing: .5px;
+  }
+  #queue-badge {
+    display: none;
+    background: #F9A825; color: #1a1a1a;
+    font-size: .65rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 10px;
+    letter-spacing: .5px;
+  }
 
   /* ajuste do content para a status bar */
   #content { top: calc(var(--header-h) + 26px); }
@@ -357,8 +372,10 @@
 
 <!-- STATUS BAR -->
 <div id="status-bar">
-  <div class="dot-live"></div>
+  <div id="dot-conn" class="dot-live"></div>
   <span id="status-text">Pronto</span>
+  <span id="queue-badge">⏳ <span id="queue-count">0</span> na fila</span>
+  <span id="offline-badge">● OFFLINE</span>
 </div>
 
 <!-- CONTEÚDO DAS PÁGINAS -->
@@ -721,6 +738,11 @@ loadCameras();
 // Carrega cadastro automaticamente ao abrir
 carregarDoDrive();
 
+// Estado inicial de conexão + processa fila pendente
+setOnlineStatus(navigator.onLine);
+atualizarBadgeFila();
+if (navigator.onLine) processarFila();
+
 // ── SCANNER ───────────────────────────────────────────────────────────────────
 let html5QrCode = null;
 let scanning = false;
@@ -880,25 +902,113 @@ async function onScanSuccess(decodedText) {
   if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
 }
 
+// ── OFFLINE / FILA DE SINCRONIZAÇÃO ──────────────────────────────────────────
+const LS_CADASTRO   = 'ssb_cadastro';
+const LS_CADASTRO_TS = 'ssb_cadastro_ts';
+const LS_QUEUE      = 'ssb_sync_queue';
+
+function salvarCadastroLocal(obj) {
+  try {
+    localStorage.setItem(LS_CADASTRO, JSON.stringify(obj));
+    localStorage.setItem(LS_CADASTRO_TS, new Date().toISOString());
+  } catch(e) { console.warn('localStorage cheio:', e); }
+}
+
+function carregarCadastroLocal() {
+  try {
+    const raw = localStorage.getItem(LS_CADASTRO);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e) { return null; }
+}
+
+function getQueue() {
+  try { return JSON.parse(localStorage.getItem(LS_QUEUE) || '[]'); } catch(e) { return []; }
+}
+
+function setQueue(q) {
+  try { localStorage.setItem(LS_QUEUE, JSON.stringify(q)); } catch(e) {}
+}
+
+function atualizarBadgeFila() {
+  const q = getQueue();
+  const badge = document.getElementById('queue-badge');
+  document.getElementById('queue-count').textContent = q.length;
+  badge.style.display = q.length > 0 ? 'inline-block' : 'none';
+}
+
+function setOnlineStatus(online) {
+  const dot    = document.getElementById('dot-conn');
+  const badge  = document.getElementById('offline-badge');
+  dot.className   = online ? 'dot-live' : 'dot-offline';
+  badge.style.display = online ? 'none' : 'inline-block';
+}
+
+async function processarFila() {
+  const url = document.getElementById('webhook-url').value.trim();
+  if (!url || !navigator.onLine) return;
+  const q = getQueue();
+  if (!q.length) return;
+
+  const terminal = document.getElementById('terminal-name').value.trim() || 'Terminal 1';
+  const falhas = [];
+
+  for (const item of q) {
+    try {
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...item, terminal })
+      });
+    } catch(e) {
+      falhas.push(item); // mantém na fila se falhou
+    }
+  }
+
+  setQueue(falhas);
+  atualizarBadgeFila();
+  if (falhas.length === 0 && q.length > 0) {
+    setStatus(`✅ ${q.length} registro${q.length > 1 ? 's' : ''} sincronizado${q.length > 1 ? 's' : ''} com o servidor`);
+  }
+}
+
+// Eventos de conexão
+window.addEventListener('online',  () => { setOnlineStatus(true);  processarFila(); });
+window.addEventListener('offline', () => { setOnlineStatus(false); setStatus('Modo offline — registros salvos localmente'); });
+
 // ── ENVIO AO GOOGLE SHEETS ────────────────────────────────────────────────────
-// Usa no-cors pois o Apps Script não suporta CORS customizado.
-// A verificação de duplicata entre terminais é feita no servidor (Apps Script),
-// que usa LockService para serializar acessos simultâneos.
 async function sendToSheet(data) {
   const url = document.getElementById('webhook-url').value.trim();
   if (!url) return;
 
   const terminal = document.getElementById('terminal-name').value.trim() || 'Terminal 1';
+  const payload  = { ...data, terminal };
+
+  if (!navigator.onLine) {
+    // Salva na fila local e avisa
+    const q = getQueue();
+    q.push(payload);
+    setQueue(q);
+    atualizarBadgeFila();
+    setStatus(`Offline — registro salvo localmente (fila: ${q.length})`);
+    return;
+  }
 
   try {
     await fetch(url, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...data, terminal })
+      body: JSON.stringify(payload)
     });
   } catch (e) {
-    console.warn('Envio:', e);
+    // Falha de rede mesmo online → salva na fila
+    const q = getQueue();
+    q.push(payload);
+    setQueue(q);
+    atualizarBadgeFila();
+    console.warn('Envio falhou, adicionado à fila:', e);
   }
 }
 
@@ -972,31 +1082,61 @@ function setStatus(msg) {
   document.getElementById('status-text').textContent = msg;
 }
 
-// ── CADASTRO VIA APPS SCRIPT ─────────────────────────────────────────────────
+// ── CADASTRO VIA APPS SCRIPT (com cache local offline) ───────────────────────
 async function carregarDoDrive() {
   setCadastroStatus('⏳ Carregando cadastro...');
   const url = document.getElementById('webhook-url').value.trim();
-  if (!url) {
-    setCadastroStatus('⚠️ Configure a URL do Apps Script primeiro.');
+
+  // Sem conexão → usa cache local imediatamente
+  if (!navigator.onLine) {
+    const local = carregarCadastroLocal();
+    if (local) {
+      cadastro = local;
+      const ts = localStorage.getItem(LS_CADASTRO_TS);
+      const tsStr = ts ? new Date(ts).toLocaleDateString('pt-BR') : '?';
+      setCadastroStatus(`✅ Cadastro carregado (cache de ${tsStr})`);
+    } else {
+      setCadastroStatus('⚠️ Offline e sem cadastro em cache. Use "Arquivo local".');
+    }
     return;
   }
+
+  if (!url) {
+    // Online mas sem URL — tenta cache
+    const local = carregarCadastroLocal();
+    if (local) {
+      cadastro = local;
+      setCadastroStatus('⚠️ URL não configurada — usando cadastro em cache.');
+    } else {
+      setCadastroStatus('⚠️ Configure a URL do Apps Script primeiro.');
+    }
+    return;
+  }
+
   try {
     const res  = await fetch(url + '?acao=cadastro');
     const json = await res.json();
     if (json.status !== 'ok' || !json.cadastro) throw new Error(json.message);
 
-    // Monta o objeto cadastro direto do JSON (sem precisar parsear CSV)
     cadastro = {};
     json.cadastro.forEach(c => {
       cadastro[c.cpf] = { nome: c.nome, demitido: c.demitido };
     });
 
-    const total  = Object.keys(cadastro).length;
-    const ativos = Object.values(cadastro).filter(c => !c.demitido).length;
+    salvarCadastroLocal(cadastro); // persiste para uso offline
     setCadastroStatus(`✅ Cadastro carregado · ${new Date().toLocaleTimeString('pt-BR')}`);
 
   } catch (e) {
-    setCadastroStatus('❌ Falha ao carregar. Use "Arquivo local".');
+    // Falha na rede → tenta cache local
+    const local = carregarCadastroLocal();
+    if (local) {
+      cadastro = local;
+      const ts = localStorage.getItem(LS_CADASTRO_TS);
+      const tsStr = ts ? new Date(ts).toLocaleDateString('pt-BR') : '?';
+      setCadastroStatus(`⚠️ Falha na rede — usando cadastro em cache (${tsStr})`);
+    } else {
+      setCadastroStatus('❌ Falha ao carregar. Use "Arquivo local".');
+    }
     console.warn('Cadastro:', e);
   }
 }
