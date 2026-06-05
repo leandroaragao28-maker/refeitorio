@@ -448,10 +448,38 @@
   <div class="page" id="page-qr">
     <div class="card">
       <div class="card-title">🪪 Gerar QR Codes</div>
-      <label>Nomes dos colaboradores (um por linha)</label>
-      <textarea id="emp-names" rows="5" placeholder="João Silva&#10;Maria Santos&#10;Carlos Oliveira"></textarea>
-      <button class="btn-primary" onclick="generateQRs()">✦ Gerar QR Codes</button>
-      <button class="btn-primary" onclick="exportPDF()" style="background:var(--green-dark);margin-top:8px;">📄 Gerar e Exportar PDF</button>
+
+      <!-- Cabeçalho das colunas -->
+      <div style="display:grid;grid-template-columns:1fr 130px 36px;gap:8px;margin-bottom:6px;padding:0 2px;">
+        <span style="font-size:.72rem;font-weight:600;color:var(--text-sub);">NOME COMPLETO</span>
+        <span style="font-size:.72rem;font-weight:600;color:var(--text-sub);">CPF</span>
+        <span></span>
+      </div>
+
+      <!-- Lista dinâmica de colaboradores -->
+      <div id="emp-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+
+      <!-- Botão adicionar linha -->
+      <button onclick="addEmpRow()" class="btn-sm"
+        style="width:100%;padding:11px;text-align:center;margin-bottom:14px;border-style:dashed;">
+        ＋ Adicionar Colaborador
+      </button>
+
+      <!-- Ações principais -->
+      <div style="display:flex;gap:8px;">
+        <button class="btn-primary" onclick="generateQRs()" style="flex:1;margin-top:0;">✦ Gerar QR Codes</button>
+        <button class="btn-sm" onclick="exportPDF()" style="padding:14px 12px;">📄 PDF</button>
+      </div>
+
+      <!-- Seção salvar no Drive (aparece após gerar) -->
+      <div id="qr-save-section" style="display:none;margin-top:10px;">
+        <button class="btn-primary" onclick="salvarNoCadastro()"
+          style="background:#1565C0;margin-top:0;width:100%;">
+          ☁ Salvar no Cadastro do Drive
+        </button>
+        <div id="qr-save-status" style="font-size:.78rem;text-align:center;margin-top:8px;color:var(--text-sub);min-height:18px;"></div>
+      </div>
+
       <div id="qr-output"></div>
     </div>
   </div>
@@ -826,10 +854,13 @@ function decodificarQR(raw) {
     }
   } catch (e) { /* não é Base64 */ }
 
-  // Formato SSB gerado pelo app
+  // Formato SSB gerado pelo app: SSB|Nome|CPF ou SSB|Nome|EmpId (legado)
   if (raw.startsWith('SSB|')) {
-    const parts = raw.split('|');
-    return { tipo: 'ssb', nome: parts[1] || raw, empId: parts[2] || '', cpf: '' };
+    const parts  = raw.split('|');
+    const nome   = parts[1] || raw;
+    const part3  = (parts[2] || '').replace(/\D/g, '');
+    const isCPF  = /^\d{11}$/.test(part3);
+    return { tipo: 'ssb', nome, empId: isCPF ? '' : part3, cpf: isCPF ? part3 : '' };
   }
 
   // Texto puro (fallback)
@@ -1170,28 +1201,124 @@ function makeQRBase64(text) {
   return qr.toDataURL('image/png');
 }
 
+// Máscara CPF: 000.000.000-00
+function mascaraCPF(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 11);
+  if (v.length > 9)      v = v.replace(/^(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
+  else if (v.length > 6) v = v.replace(/^(\d{3})(\d{3})(\d{0,3})/,        '$1.$2.$3');
+  else if (v.length > 3) v = v.replace(/^(\d{3})(\d{0,3})/,               '$1.$2');
+  input.value = v;
+}
+
+// Adiciona uma linha de colaborador
+function addEmpRow(nome, cpf) {
+  const list = document.getElementById('emp-list');
+  const row  = document.createElement('div');
+  row.className = 'emp-row';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 130px 36px;gap:8px;align-items:center;';
+  row.innerHTML = `
+    <input type="text"  class="emp-nome" placeholder="Nome completo"     value="${nome || ''}"
+           style="margin:0;padding:10px 11px;">
+    <input type="text"  class="emp-cpf"  placeholder="000.000.000-00"    value="${cpf  || ''}"
+           maxlength="14" oninput="mascaraCPF(this)" style="margin:0;padding:10px 11px;">
+    <button onclick="removeEmpRow(this)"
+      style="border:none;background:var(--red-pale);color:var(--red);border-radius:8px;
+             padding:0;height:40px;width:36px;cursor:pointer;font-size:1rem;flex-shrink:0;">✕</button>`;
+  list.appendChild(row);
+}
+
+function removeEmpRow(btn) {
+  btn.closest('.emp-row').remove();
+}
+
+// Inicializa com 3 linhas em branco
+(function initEmpRows() {
+  for (let i = 0; i < 3; i++) addEmpRow();
+})();
+
+function cpfValido(cpf) {
+  const d = cpf.replace(/\D/g, '');
+  return d.length === 11 && !/^(\d)\1{10}$/.test(d); // 11 dígitos e não todos iguais
+}
+
 function generateQRs() {
-  const raw = document.getElementById('emp-names').value.trim();
-  if (!raw) { alert('Insira pelo menos um nome.'); return; }
-  const names = raw.split('\n').map(n => n.trim()).filter(Boolean);
+  const rows = [...document.querySelectorAll('.emp-row')];
+  const colaboradores = rows.map(r => ({
+    nome: r.querySelector('.emp-nome').value.trim(),
+    cpf:  r.querySelector('.emp-cpf').value.replace(/\D/g,'')
+  })).filter(c => c.nome);
+
+  if (!colaboradores.length) { alert('Insira pelo menos um nome.'); return; }
+
+  // Valida CPFs (avisa mas não bloqueia — QR sem CPF usa só o nome)
+  const semCPF = colaboradores.filter(c => c.cpf && !cpfValido(c.cpf));
+  if (semCPF.length) {
+    const nomes = semCPF.map(c => c.nome).join(', ');
+    if (!confirm(`CPF inválido para: ${nomes}.\nDeseja gerar assim mesmo (sem validação por CPF no scanner)?`)) return;
+  }
+
   const out = document.getElementById('qr-output');
   out.innerHTML = '';
   qrData = [];
 
-  names.forEach((name, i) => {
-    const empId = String(i + 1).padStart(3, '0');
-    const payload = `SSB|${name}|${empId}`;
+  colaboradores.forEach((c, i) => {
+    // Payload: SSB|Nome|CPF (CPF permite validação pelo scanner)
+    const payload = c.cpf ? `SSB|${c.nome}|${c.cpf}` : `SSB|${c.nome}|${String(i+1).padStart(3,'0')}`;
     const src = makeQRBase64(payload);
-    qrData.push({ src, name, id: empId });
+    const cpfFmt = c.cpf ? c.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : '—';
+    qrData.push({ src, nome: c.nome, cpf: c.cpf, cpfFmt });
 
     const wrap = document.createElement('div');
     wrap.className = 'qr-card';
     wrap.innerHTML = `
-      <img src="${src}" alt="QR ${name}">
-      <div class="qr-name">${name}</div>
-      <div class="qr-id">ID: ${empId}</div>`;
+      <img src="${src}" alt="QR ${c.nome}">
+      <div class="qr-name">${c.nome}</div>
+      <div class="qr-id">CPF: ${cpfFmt}</div>`;
     out.appendChild(wrap);
   });
+
+  document.getElementById('qr-save-section').style.display = 'block';
+  document.getElementById('qr-save-status').textContent = '';
+}
+
+// ── SALVAR COLABORADORES NO CADASTRO DO DRIVE ─────────────────────────────────
+async function salvarNoCadastro() {
+  if (!qrData.length) { alert('Gere os QR Codes primeiro.'); return; }
+  const url = document.getElementById('webhook-url').value.trim();
+  if (!url) { alert('URL do Apps Script não configurada.'); return; }
+
+  const statusEl = document.getElementById('qr-save-status');
+  statusEl.textContent = '⏳ Salvando no cadastro...';
+  statusEl.style.color = 'var(--text-sub)';
+
+  const comCPF = qrData.filter(c => c.cpf && cpfValido(c.cpf));
+  if (!comCPF.length) {
+    statusEl.textContent = '⚠️ Nenhum colaborador com CPF válido para salvar.';
+    return;
+  }
+
+  let ok = 0, erros = 0;
+  for (const c of comCPF) {
+    try {
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'inserirCadastro', nome: c.nome, cpf: c.cpf })
+      });
+      ok++;
+    } catch(e) { erros++; }
+  }
+
+  if (erros === 0) {
+    statusEl.textContent = `✅ ${ok} colaborador${ok > 1 ? 'es' : ''} enviado${ok > 1 ? 's' : ''} para o cadastro. Atualize a lista na aba Config.`;
+    statusEl.style.color = 'var(--green-dark)';
+    // Recarrega cadastro após 2s para refletir os novos registros
+    setTimeout(() => carregarDoDrive(), 2000);
+  } else {
+    statusEl.textContent = `⚠️ ${ok} enviado${ok > 1 ? 's' : ''}, ${erros} falharam. Verifique a conexão.`;
+    statusEl.style.color = '#E65100';
+  }
 }
 
 function exportPDF() {
@@ -1212,8 +1339,8 @@ function exportPDF() {
       <div class="qr-card">
         <div class="brand">SS&B CONSTRUTORA</div>
         <img src="${c.src}">
-        <div class="name">${c.name}</div>
-        <div class="id">ID: ${c.id}</div>
+        <div class="name">${c.nome}</div>
+        <div class="id">CPF: ${c.cpfFmt || '—'}</div>
       </div>`).join('')}
     </body></html>`);
   w.document.close();
