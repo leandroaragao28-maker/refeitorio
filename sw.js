@@ -1,60 +1,76 @@
 // SS&B Refeitório — Service Worker
-const CACHE = 'ssb-refeitorio-v4';
+const CACHE = 'ssb-refeitorio-v5';
 
-// Recursos que devem SEMPRE ser buscados na rede primeiro (HTML principal)
-const NETWORK_FIRST = ['index.html', '/refeitorio/', '/refeitorio/index.html'];
+// Recursos estáticos para pré-cachear na instalação
+const PRECACHE = [
+  './',
+  './index.html',
+  './manifest.json',
+  'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js'
+];
 
-// Instalação — ativa imediatamente sem esperar aba fechar
+// Instalação — pré-cacheia recursos essenciais
+// SEM skipWaiting: novo SW só ativa quando todas as abas fecharem,
+// evitando limpeza de localStorage causada por troca abrupta de SW.
 self.addEventListener('install', e => {
-  self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE).then(cache => cache.addAll(PRECACHE).catch(() => {}))
+  );
 });
 
-// Ativação — apaga todos os caches antigos
+// Ativação — apaga caches antigos e assume controle suavemente
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE).map(k => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 // Fetch — estratégia híbrida
 self.addEventListener('fetch', e => {
   const url = e.request.url;
 
-  // Ignora URLs que não sejam http/https (ex: chrome-extension://)
+  // Ignora não-http (chrome-extension://, etc.)
   if (!url.startsWith('http')) return;
 
-  // Apps Script e APIs externas: sempre rede, sem cache
+  // Apps Script: sempre rede, nunca cache (dados dinâmicos)
   if (url.includes('script.google.com')) return;
 
-  const isNetworkFirst = NETWORK_FIRST.some(p => url.endsWith(p)) || url === self.location.origin + '/refeitorio/';
-
-  if (isNetworkFirst) {
-    // REDE PRIMEIRO: busca versão mais recente, atualiza cache, fallback offline
+  // index.html — cache com revalidação em background (stale-while-revalidate)
+  // Entrega o cache imediatamente e atualiza silenciosamente para a próxima visita.
+  // Isso evita a espera de rede E evita a troca abrupta que limpava o localStorage.
+  if (url.endsWith('index.html') || url.endsWith('/') || url.endsWith('/refeitorio/')) {
     e.respondWith(
-      fetch(e.request)
-        .then(res => {
+      caches.open(CACHE).then(cache =>
+        cache.match(e.request).then(cached => {
+          const networkFetch = fetch(e.request).then(res => {
+            if (res && res.status === 200)
+              cache.put(e.request, res.clone());
+            return res;
+          }).catch(() => null);
+          // Retorna cache imediato; rede atualiza para a próxima abertura
+          return cached || networkFetch;
+        })
+      )
+    );
+    return;
+  }
+
+  // Demais recursos — cache primeiro (ícones, fontes, libs)
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      if (cached) return cached;
+      return fetch(e.request).then(res => {
+        if (res && res.status === 200 && res.type !== 'opaque') {
           const clone = res.clone();
           caches.open(CACHE).then(cache => cache.put(e.request, clone));
-          return res;
-        })
-        .catch(() => caches.match(e.request))
-    );
-  } else {
-    // CACHE PRIMEIRO: imagens, libs externas, ícones (performance)
-    e.respondWith(
-      caches.match(e.request).then(cached => {
-        if (cached) return cached;
-        return fetch(e.request).then(res => {
-          if (res && res.status === 200 && res.type === 'basic') {
-            const clone = res.clone();
-            caches.open(CACHE).then(cache => cache.put(e.request, clone));
-          }
-          return res;
-        }).catch(() => cached);
-      })
-    );
-  }
+        }
+        return res;
+      }).catch(() => cached);
+    })
+  );
 });

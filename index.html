@@ -494,13 +494,22 @@
         <div id="cadastro-status" style="font-size:.82rem;color:var(--text-sub);margin-bottom:10px;text-align:center;">
           ⏳ Carregando cadastro...
         </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn-sm" onclick="carregarDoDrive()" style="flex:1;justify-content:center;display:flex;padding:10px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-sm" onclick="carregarDoDrive()" style="flex:1;justify-content:center;display:flex;padding:10px;min-width:120px;">
             🔄 Atualizar do Drive
           </button>
-          <input type="file" id="cadastro-file" accept=".csv" style="display:none" onchange="onCadastroUpload(event)">
-          <button class="btn-sm" onclick="document.getElementById('cadastro-file').click()" style="flex:1;justify-content:center;display:flex;padding:10px;">
+          <input type="file" id="cadastro-file" accept=".csv,.json" style="display:none" onchange="onCadastroUpload(event)">
+          <button class="btn-sm" onclick="document.getElementById('cadastro-file').click()" style="flex:1;justify-content:center;display:flex;padding:10px;min-width:100px;">
             📂 Arquivo local
+          </button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn-sm" onclick="exportarCacheJSON()" style="flex:1;justify-content:center;display:flex;padding:8px;font-size:.72rem;">
+            💾 Exportar backup
+          </button>
+          <input type="file" id="cache-file" accept=".json" style="display:none" onchange="importarCacheJSON(event)">
+          <button class="btn-sm" onclick="document.getElementById('cache-file').click()" style="flex:1;justify-content:center;display:flex;padding:8px;font-size:.72rem;">
+            📥 Importar backup
           </button>
         </div>
       </div>
@@ -827,16 +836,18 @@ function carregarCadastro(csvText) {
   cadastro = {};
   lines.forEach(line => {
     const cols = line.split(',').map(c => c.replace(/"/g, '').trim());
-    const cpf      = (cols[0] || '').replace(/\D/g, ''); // só dígitos — aceita com ou sem pontuação
+    const cpf      = (cols[0] || '').replace(/\D/g, '').padStart(11, '0');
     const nome     = cols[1] || '';
     const rescisao = (cols[2] || '').trim();
     if (cpf && nome) {
       cadastro[cpf] = { nome, demitido: rescisao !== '' };
     }
   });
-  const total  = Object.keys(cadastro).length;
-  const ativos = Object.values(cadastro).filter(c => !c.demitido).length;
-  setCadastroStatus(`✅ Cadastro carregado · ${new Date().toLocaleTimeString('pt-BR')}`);
+  salvarCadastroLocal(cadastro); // persiste no cache — igual ao carregamento via Drive
+  const tsStr = new Date().toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+  setCadastroStatus(`✅ Cadastro carregado · sincronizado em ${tsStr}`);
 }
 
 // ── DECODIFICAÇÃO DO QR CODE ──────────────────────────────────────────────────
@@ -1205,15 +1216,65 @@ function setCadastroStatus(msg) {
   setStatus(msg.replace(/<[^>]+>/g, ''));
 }
 
-// ── UPLOAD CADASTRO LOCAL (fallback) ─────────────────────────────────────────
+// ── UPLOAD CADASTRO LOCAL (CSV ou JSON) ──────────────────────────────────────
 function onCadastroUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    carregarCadastro(e.target.result);
+    if (file.name.endsWith('.json')) {
+      importarCadastroJSON(e.target.result);
+    } else {
+      carregarCadastro(e.target.result);
+    }
   };
   reader.readAsText(file, 'UTF-8');
+}
+
+// ── BACKUP DO CACHE ───────────────────────────────────────────────────────────
+function exportarCacheJSON() {
+  if (!Object.keys(cadastro).length) {
+    alert('Nenhum cadastro em memória para exportar. Carregue o cadastro primeiro.');
+    return;
+  }
+  const payload = {
+    versao: 1,
+    geradoEm: new Date().toISOString(),
+    cadastro
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `cadastro_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+function importarCacheJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => importarCadastroJSON(e.target.result);
+  reader.readAsText(file, 'UTF-8');
+  event.target.value = ''; // permite reimportar o mesmo arquivo
+}
+
+function importarCadastroJSON(jsonText) {
+  try {
+    const payload = JSON.parse(jsonText);
+    // Aceita tanto o formato de backup ({ versao, cadastro }) quanto objeto puro
+    const dados = payload.cadastro || payload;
+    if (typeof dados !== 'object' || Array.isArray(dados))
+      throw new Error('Formato inválido');
+    cadastro = dados;
+    salvarCadastroLocal(cadastro);
+    const tsStr = new Date().toLocaleString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    const total = Object.keys(cadastro).length;
+    setCadastroStatus(`✅ Backup importado (${total} colaboradores) · ${tsStr}`);
+  } catch(e) {
+    alert('Arquivo inválido. Use um backup gerado por este sistema.');
+  }
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
