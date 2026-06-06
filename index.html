@@ -764,8 +764,8 @@ async function loadCameras() {
 }
 loadCameras();
 
-// Carrega cadastro automaticamente ao abrir
-carregarDoDrive();
+// Inicializa cadastro do cache local (sem ir ao Drive)
+inicializarCadastro();
 
 // Estado inicial de conexão + processa fila pendente
 setOnlineStatus(navigator.onLine);
@@ -1122,34 +1122,48 @@ function setStatus(msg) {
   document.getElementById('status-text').textContent = msg;
 }
 
-// ── CADASTRO VIA APPS SCRIPT (com cache local offline) ───────────────────────
+// ── CADASTRO — INICIALIZAÇÃO (usa cache; não vai ao Drive) ───────────────────
+// Chamada automática ao abrir o app. Só usa o cache local.
+// Para buscar dados atualizados, o usuário clica em "Atualizar do Drive".
+function inicializarCadastro() {
+  const local = carregarCadastroLocal();
+  if (local && Object.keys(local).length > 0) {
+    cadastro = local;
+    const ts    = localStorage.getItem(LS_CADASTRO_TS);
+    const tsStr = ts ? new Date(ts).toLocaleString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    }) : '?';
+    setCadastroStatus(`✅ Cadastro carregado · sincronizado em ${tsStr}`);
+  } else {
+    // Nenhum cache ainda — tenta buscar do Drive automaticamente (1ª vez)
+    carregarDoDrive();
+  }
+}
+
+// ── CADASTRO — ATUALIZAÇÃO DO DRIVE (chamada manual pelo botão) ───────────────
 async function carregarDoDrive() {
-  setCadastroStatus('⏳ Carregando cadastro...');
+  setCadastroStatus('⏳ Buscando cadastro no Drive...');
   const url = document.getElementById('webhook-url').value.trim();
 
-  // Sem conexão → usa cache local imediatamente
+  // Sem conexão → usa cache local
   if (!navigator.onLine) {
     const local = carregarCadastroLocal();
-    if (local) {
+    if (local && Object.keys(local).length > 0) {
       cadastro = local;
-      const ts = localStorage.getItem(LS_CADASTRO_TS);
-      const tsStr = ts ? new Date(ts).toLocaleDateString('pt-BR') : '?';
-      setCadastroStatus(`✅ Cadastro carregado (cache de ${tsStr})`);
+      const ts    = localStorage.getItem(LS_CADASTRO_TS);
+      const tsStr = ts ? new Date(ts).toLocaleString('pt-BR', {
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      }) : '?';
+      setCadastroStatus(`✅ Cadastro carregado · sincronizado em ${tsStr} (offline)`);
     } else {
-      setCadastroStatus('⚠️ Offline e sem cadastro em cache. Use "Arquivo local".');
+      setCadastroStatus('⚠️ Sem conexão e sem cadastro em cache. Use "Arquivo local".');
     }
     return;
   }
 
   if (!url) {
-    // Online mas sem URL — tenta cache
-    const local = carregarCadastroLocal();
-    if (local) {
-      cadastro = local;
-      setCadastroStatus('⚠️ URL não configurada — usando cadastro em cache.');
-    } else {
-      setCadastroStatus('⚠️ Configure a URL do Apps Script primeiro.');
-    }
+    setCadastroStatus('⚠️ URL do Apps Script não configurada.');
     return;
   }
 
@@ -1163,17 +1177,22 @@ async function carregarDoDrive() {
       cadastro[c.cpf] = { nome: c.nome, demitido: c.demitido };
     });
 
-    salvarCadastroLocal(cadastro); // persiste para uso offline
-    setCadastroStatus(`✅ Cadastro carregado · ${new Date().toLocaleTimeString('pt-BR')}`);
+    salvarCadastroLocal(cadastro); // salva no cache para uso futuro
+    const tsStr = new Date().toLocaleString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    setCadastroStatus(`✅ Cadastro atualizado · sincronizado em ${tsStr}`);
 
   } catch (e) {
-    // Falha na rede → tenta cache local
+    // Falha → usa cache se disponível
     const local = carregarCadastroLocal();
-    if (local) {
+    if (local && Object.keys(local).length > 0) {
       cadastro = local;
-      const ts = localStorage.getItem(LS_CADASTRO_TS);
-      const tsStr = ts ? new Date(ts).toLocaleDateString('pt-BR') : '?';
-      setCadastroStatus(`⚠️ Falha na rede — usando cadastro em cache (${tsStr})`);
+      const ts    = localStorage.getItem(LS_CADASTRO_TS);
+      const tsStr = ts ? new Date(ts).toLocaleString('pt-BR', {
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      }) : '?';
+      setCadastroStatus(`⚠️ Falha na atualização — usando cache de ${tsStr}`);
     } else {
       setCadastroStatus('❌ Falha ao carregar. Use "Arquivo local".');
     }
