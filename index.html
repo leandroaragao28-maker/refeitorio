@@ -890,11 +890,11 @@ async function onScanSuccess(decodedText) {
   empId = qr.empId || cpf;
 
   if (cpf && Object.keys(cadastro).length > 0) {
-    // Tem cadastro carregado → valida pelo CPF
+    // ── Cadastro carregado → valida pelo CPF ──
     const colaborador = cadastro[cpf];
 
     if (!colaborador) {
-      showFeedback('warn', 'CPF não encontrado', `CPF: ${cpf}`);
+      showFeedback('warn', 'CPF não encontrado no cadastro', `CPF: ${cpf}`);
       if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       return;
     }
@@ -908,11 +908,19 @@ async function onScanSuccess(decodedText) {
 
     nome = colaborador.nome;
 
+  } else if (cpf && Object.keys(cadastro).length === 0) {
+    // ── CPF lido mas cadastro não carregado → bloqueia para evitar gravar CPF como nome ──
+    showFeedback('warn', 'Cadastro não carregado', 'Acesse Config → Atualizar do Drive antes de escanear');
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    setStatus('⚠️ Carregue o cadastro antes de escanear');
+    return;
+
   } else if (qr.nome) {
-    // Sem cadastro carregado → usa nome do QR
+    // ── QR no formato SSB|Nome (sem CPF) ─ usa nome diretamente ──
     nome = qr.nome;
   } else {
-    nome = cpf || decodedText;
+    // ── Fallback: texto livre ──
+    nome = decodedText;
   }
 
   // ── Verifica duplicata na mesma refeição/dia ──
